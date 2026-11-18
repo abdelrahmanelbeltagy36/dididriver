@@ -59,18 +59,18 @@ Views.settings = async function (root) {
     '<div class="t2" style="margin-bottom:8px">التطبيق يحسب لك <b>متى تحتاج تغيير كل حاجة</b> على عداد عربيتك الحقيقي:' +
     ' كل ما تسجّل عملية صيانة (تغيير زيت مثلًا) في سجل الصيانة واكتب رقم العداد وقتها،' +
     ' يبدأ العد من جديد ويقولك <b>باقي كام كم</b> على التغيير الجديد — تلقائيًا بضاعة.</div>' +
-    '<div class="tbl-wrap" style="margin-bottom:6px"><table class="tbl"><thead><tr>' +
-    '<th>نوع الصيانة</th><th>كل كام كم</th><th>أقصى مدة (شهور)</th></tr></thead><tbody>' +
+    '<div class="t2" style="margin-bottom:10px">اكتب 0 في أي خانة = تذكير مقفول للنوع ده. اللي يحصل الأول (الكم أو الشهور) هو اللي يطلع التذكير.</div>' +
     CAT_LIST.map(ck => {
       const iv = S.intervals[ck];
-      return '<tr>' +
-        '<td style="white-space:nowrap">' + esc(CATS[ck]) + '</td>' +
-        '<td><input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="km" value="' + (iv.km || 0) + '" placeholder="0 = بدون"></td>' +
-        '<td><input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="months" value="' + (iv.months || 0) + '" placeholder="0 = بدون"></td>' +
-        '</tr>';
+      return '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">' +
+        '<div class="t1" style="font-weight:800;margin-bottom:4px">' + esc(CATS[ck]) + '</div>' +
+        '<div class="grid2">' +
+        '<div class="field" style="margin:0"><label style="color:var(--pri);font-weight:700">📏 كل كام كم</label>' +
+        '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="km" value="' + (iv.km || 0) + '" placeholder="0 = بدون"></div>' +
+        '<div class="field" style="margin:0"><label style="color:var(--pri);font-weight:700">⏱️ أقصى مدة (شهور)</label>' +
+        '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="months" value="' + (iv.months || 0) + '" placeholder="0 = بدون"></div>' +
+        '</div></div>';
     }).join('') +
-    '</tbody></table></div>' +
-    '<div class="t2" style="margin:2px 0 10px">اكتب 0 في أي خانة = تذكير مقفول للنوع ده. اللي يحصل الأول (الكم أو الشهور) هو اللي يطلع التذكير.</div>' +
     '<div class="divider"></div>' +
     '<div class="t2" style="font-weight:800;margin-bottom:6px">📍 حالة عربيتك دلوقتي (حسب عدادك الحالي: <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi> كم)</div>' +
     CAT_LIST.filter(ck => { const iv = S.intervals[ck]; return iv && (iv.km || iv.months); }).map(ck => {
