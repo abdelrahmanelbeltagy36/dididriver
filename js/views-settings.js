@@ -75,21 +75,23 @@ Views.settings = async function (root) {
     '<div class="t2" style="font-weight:800;margin-bottom:6px">📍 حالة عربيتك دلوقتي (حسب عدادك الحالي: <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi> كم)</div>' +
     CAT_LIST.filter(ck => { const iv = S.intervals[ck]; return iv && (iv.km || iv.months); }).map(ck => {
       const iv = S.intervals[ck];
-      const last = ivMaints.filter(m => m.category === ck && !m.deleted).sort((a, b) => b.date.localeCompare(a.date))[0];
-      const r = reminderFor(ck, last, iv, ivOdo, ivToday);
+      const last = ivMaints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0];
+      const r = maintDueInfo(ck, last, iv, ivOdo, ivToday);
       let line;
       if (!last) {
         line = '<span class="badge gray">لسه مفيش تسجيل</span> أول ما تغيّر <b>' + esc(CATS[ck]) + '</b> سجّلها في سجل الصيانة وهبدأ أعدّ لك من ساعتها';
       } else {
         const parts = [];
-        if (r.kmLeft !== null) parts.push('باقي <bdi dir="ltr">' + fmtN(Math.max(0, r.kmLeft)) + '</bdi> كم (النيكسة عند <bdi dir="ltr">' + fmtN((+last.odo || 0) + iv.km) + '</bdi>)');
-        if (r.daysLeft !== null) parts.push('أو بعد <bdi dir="ltr">' + Math.max(0, Math.round(r.daysLeft / 30)) + '</bdi> شهر تقريبًا');
-        const badge = r.status === 'overdue' ? '<span class="badge red">متأخرة الآن ⚠️</span>'
-          : r.status === 'due' ? '<span class="badge orange">مستحقة قريبًا 🔔</span>'
-          : r.status === 'soon' ? '<span class="badge orange">قربت</span>'
-          : '<span class="badge green">تمام ✓</span>';
-        line = badge + ' ' + parts.join(' — ') +
-          '<div class="t2">آخر مرة: ' + esc(last.date) + (last.odo ? ' عند عداد <bdi dir="ltr">' + fmtN(last.odo) + '</bdi> كم' : '') + '</div>';
+        if (r.nextDueKm !== null) parts.push('التغيير الجاي عند <bdi dir="ltr">' + fmtN(r.nextDueKm) + '</bdi> كم');
+        if (r.kmLeft !== null && r.kmLeft > 0) parts.push('باقي <bdi dir="ltr">' + fmtN(r.kmLeft) + '</bdi> كم');
+        if (r.daysLeft !== null && r.daysLeft > 0) parts.push('أو بعد <bdi dir="ltr">' + Math.max(0, Math.round(r.daysLeft / 30)) + '</bdi> شهر تقريبًا');
+        let badge;
+        if (r.level === 'missed') badge = '<span class="badge red">🔴 فاتك! غيّرها ضروري</span>';
+        else if (r.level === 'soon') badge = '<span class="badge green">🟢 قربت!</span>';
+        else badge = '<span class="badge gray">تمام ✓</span>';
+        line = badge + ' ' + parts.join(' — ');
+        if (r.level === 'missed') line += '<div class="t2" style="color:var(--neg);font-weight:700">استحقاقها كان ' + (r.nextDueKm ? 'عند <bdi dir="ltr">' + fmtN(r.nextDueKm) + '</bdi> كم' : '') + ' وانت عند <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi></div>';
+        line += '<div class="t2">آخر مرة: ' + esc(last.date) + (last.odo ? ' عند عداد <bdi dir="ltr">' + fmtN(last.odo) + '</bdi> كم' : '') + '</div>';
       }
       return '<div class="kv" style="align-items:start"><span class="k" style="white-space:nowrap">' + esc(CATS[ck]) + '</span>' +
         '<span class="v" style="text-align:right;font-weight:500">' + line + '</span></div>';

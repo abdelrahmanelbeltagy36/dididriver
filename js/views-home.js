@@ -97,16 +97,15 @@ Views.home = async function (root) {
   if (W.fuelBal < 0) warns.push('<div class="warn-strip">⛽ خزنة البنزين بالعجز — تحتاج <bdi dir="ltr">' + fmtN(-W.fuelBal) + '</bdi> ج.م لتغطية المشتريات</div>');
   if (W.maintBal < 0) warns.push('<div class="warn-strip">🔧 خزنة الصيانة بالعجز — تحتاج <bdi dir="ltr">' + fmtN(-W.maintBal) + '</bdi> ج.م لتغطية المصاريف</div>');
   const odo = currentOdo(sessions, maints);
+  const missedNames = [], soonNames = [];
   for (const ck of CAT_LIST) {
-    const iv = S.intervals[ck];
-    if (!iv || (!iv.km && !iv.months)) continue;
-    const last = maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0];
-    const r = reminderFor(ck, last, iv, odo, today);
-    if (r && (r.status === 'overdue' || r.status === 'due')) {
-      const label = CATS[ck];
-      warns.push('<div class="warn-strip orange">🔔 ' + esc(label) + ' — ' + (r.status === 'overdue' ? 'مستحقة ومتأخرة الآن' : 'مستحقة قريبًا') + '</div>');
-    }
+    const info = maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odo, today);
+    if (!info) continue;
+    if (info.level === 'missed') missedNames.push(CATS[ck]);
+    else if (info.level === 'soon') soonNames.push(CATS[ck]);
   }
+  for (const n of missedNames) warns.push('<div class="warn-strip" style="background:var(--neg-soft);color:var(--neg)">🔴 <b>' + esc(n) + '</b> — فاتك تغييرها! عدادك عدّى موعدها. غيّرها وسجّلها من خزنة العربية</div>');
+  for (const n of soonNames) warns.push('<div class="warn-strip" style="background:var(--pos-soft);color:var(--pos)">🟢 <b>' + esc(n) + '</b> — قرب موعدها (فاضل 500 كم أو أقل) جهّز نفسك</div>');
   html += warns.length ? '<div>' + warns.join('') + '</div>' : '';
 
   /* ---------- weekly & monthly comparisons ---------- */

@@ -81,8 +81,38 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   go('home');
 
+  /* 🔔 weekly maintenance nudge — once every 7 days on app open */
+  setTimeout(() => { weeklyNudge().catch(() => {}); }, 1500);
+
   /* service worker for offline + installability */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     try { navigator.serviceWorker.register('sw.js'); } catch (e) { /* ignore */ }
   }
 });
+
+/* ---------- weekly nudge: عدّل العداد + راجع المواعيد ---------- */
+async function weeklyNudge() {
+  const last = +(await kvGet('lastNudgeTs', 0)) || 0;
+  if (Date.now() - last < 7 * 86400000) return;
+  await kvSet('lastNudgeTs', Date.now());
+  if (Nav.current && Nav.current !== 'home') return; /* don't interrupt user mid-task */
+  const sessions = await DB.all('sessions');
+  const maints = await DB.all('maintenance');
+  if (!sessions.length && !maints.length) return; /* empty app — nothing to review yet */
+  const odo = currentOdo(sessions, maints);
+  const today = todayStr();
+  const missed = [], soon = [];
+  for (const ck of CAT_LIST) {
+    const info = maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odo, today);
+    if (!info) continue;
+    if (info.level === 'missed') missed.push(CATS[ck]);
+    else if (info.level === 'soon') soon.push(CATS[ck]);
+  }
+  if (missed.length) {
+    toast('🔴 فاتك تغيير: ' + missed.join('، ') + ' — افتح خزنة العربية وسجّلها', { duration: 9000, actionLabel: 'فتح 🔧', onAction: () => go('wallets') });
+  } else if (soon.length) {
+    toast('🟢 قرب موعدها: ' + soon.join('، ') + ' — فاضل 500 كم أو أقل', { duration: 9000, actionLabel: 'فتح 🔧', onAction: () => go('wallets') });
+  } else {
+    toast('🔔 المراجعة الأسبوعية: مشيت كيلومترات؟ حدّث رقم العداد من "إضافة يوم" أو "تم التغيير"', { duration: 8000 });
+  }
+}

@@ -83,10 +83,55 @@ Views.wallets = async function (root) {
     '<div class="side neg-t">' + money(m.cost) + '</div></div>').join('');
   html += '</div>';
 
+  /* ---------- 🔧 maintenance schedule — quick "تم التغيير" per item ---------- */
+  const odoNow = currentOdo(sessions, maints);
+  const today = todayStr();
+  const dueCats = CAT_LIST.map(ck => ({ ck, info: maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odoNow, today) }))
+    .filter(x => x.info);
+  const order = { missed: 0, soon: 1, ok: 2 };
+  dueCats.sort((a, b) => order[a.info.level] - order[b.info.level]);
+  if (dueCats.length) {
+    html += '<div class="card list-card"><div class="card-title" style="padding:12px 0 2px">🔧 مواعيد الصيانة' +
+      '<span class="spacer"></span><span class="badge gray">عدادك: <bdi dir="ltr">' + fmtN(odoNow) + '</bdi> كم</span></div>';
+    for (const { ck, info } of dueCats) {
+      const parts = [];
+      if (info.kmLeft !== null) {
+        if (info.nextDueKm !== null) parts.push('التغيير الجاي عند <bdi dir="ltr">' + fmtN(info.nextDueKm) + '</bdi> كم');
+        parts.push('باقي <bdi dir="ltr">' + fmtN(Math.max(0, info.kmLeft)) + '</bdi> كم');
+      }
+      if (info.daysLeft !== null) parts.push('أو بعد <bdi dir="ltr">' + Math.max(0, Math.ceil(info.daysLeft / 30)) + '</bdi> شهر تقريبًا');
+      let badge, line;
+      if (info.level === 'missed') {
+        badge = '<span class="badge red">🔴 فاتك!</span>';
+        line = 'كان لازم يتغير ' + (info.nextDueKm ? 'عند <bdi dir="ltr">' + fmtN(info.nextDueKm) + '</bdi> كم' : '') +
+          ' وانت عند <bdi dir="ltr">' + fmtN(odoNow) + '</bdi> — غيّره ضروري 🔧';
+      } else if (info.level === 'soon') {
+        badge = '<span class="badge green">🟢 قربت!</span>';
+        line = parts.join(' — ');
+      } else {
+        badge = '<span class="badge gray">تمام</span>';
+        line = parts.join(' — ');
+      }
+      html += '<div class="row-item" style="align-items:flex-start">' +
+        '<div class="avatar-dot">' + (info.level === 'missed' ? '🚨' : info.level === 'soon' ? '🟢' : '🔧') + '</div>' +
+        '<div class="grow"><div class="t1">' + badge + ' ' + esc(CATS[ck]) + '</div>' +
+        '<div class="t2" style="line-height:1.8">' + line +
+        (info.last ? '<br>آخر مرة: ' + esc(fullDayLabel(info.last.date)) + (info.last.odo ? ' عند عداد <bdi dir="ltr">' + fmtN(info.last.odo) + '</bdi>' : '') : '<br>لسه مفيش تسجيل — أول ما تغير سجلها') +
+        '</div></div>' +
+        '<div class="side"><button class="btn btn-sm btn-pos" data-done="' + ck + '">✅ تم التغيير</button></div>' +
+        '</div>';
+    }
+    html += '</div>';
+  }
+  html += '<div id="mt-schedule-anchor"></div>';
+
   root.innerHTML = html;
 
   root.querySelector('#fuel-add').onclick = () => openFuelForm(null);
   root.querySelector('#maint-add').onclick = () => openMaintForm(null);
+
+  /* quick "✅ تم التغيير" per category */
+  root.querySelectorAll('[data-done]').forEach(b => b.onclick = () => quickMaintDone(b.dataset.done));
 
   root.querySelectorAll('[data-pid]').forEach(inp => {
     const id = inp.dataset.pid;
@@ -101,6 +146,65 @@ Views.wallets = async function (root) {
     });
   });
 };
+
+/* ---------- quick "تم التغيير" form — التاريخ + العداد + التكلفة وخلاص ---------- */
+function quickMaintDone(catKey) {
+  const iv = S.intervals[catKey] || {};
+  const odoDef = +S.odo || '';
+  const nextLine = odo => {
+    const lines = [];
+    if (iv.km) lines.push('📏 التغيير الجاي عند <bdi dir="ltr">' + fmtN(odo + iv.km) + '</bdi> كم' + (odo ? ' (كل <bdi dir="ltr">' + fmtN(iv.km) + '</bdi> كم)' : ''));
+    if (iv.months) lines.push('⏱️ أو بعد <bdi dir="ltr">' + iv.months + '</bdi> شهر تقريبًا');
+    return lines.join('<br>') || 'النوع ده بدون فترة محددة';
+  };
+  openModal(
+    '<div class="modal-title">✅ تم تغيير ' + esc(CATS[catKey]) + '</div>' +
+    '<div class="t2" style="margin-bottom:8px">سجّل التغيير وسيبدأ العد من جديد تلقائيًا — وعداد عربيتك الرئيسي هيتحدث لوحة</div>' +
+    field('التاريخ (غيرته إمتى؟)', dateInput('date', todayStr())) +
+    field('عداد المسافة وقت التغيير (كم)', numInput('odo', odoDef, 'رقم العداد دلوقتي', true)) +
+    field('التكلفة (اختياري — اتركها فاضية لو هتكتبها بعدين)', numInput('cost', '', '')) +
+    '<label class="check-row" style="color:var(--txt);font-weight:700" id="qm-wallet-row">' +
+    '<input type="checkbox" data-f="fromWallet" checked> مدفوعة من خزنة الصيانة</label>' +
+    '<div class="formula" style="margin-top:10px" id="qm-next"></div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="closeModal()">إلغاء</button>' +
+    '<button class="btn btn-pos" id="qm-save">✅ تم التغيير</button></div>',
+    { onMount: w => {
+      const odoInp = w.querySelector('[data-f="odo"]');
+      const nextBox = w.querySelector('#qm-next');
+      const upd = () => { nextBox.innerHTML = nextLine(+odoInp.value || 0); };
+      odoInp.addEventListener('input', upd);
+      odoInp.addEventListener('change', upd);
+      const costInp = w.querySelector('[data-f="cost"]');
+      const walletRow = w.querySelector('#qm-wallet-row');
+      const syncWallet = () => { walletRow.style.display = (+costInp.value > 0) ? '' : 'none'; };
+      costInp.addEventListener('input', syncWallet); syncWallet();
+      upd();
+      w.querySelector('#qm-save').onclick = async () => {
+        const date = w.querySelector('[data-f="date"]').value || todayStr();
+        const odo = +w.querySelector('[data-f="odo"]').value || 0;
+        const cost = +w.querySelector('[data-f="cost"]').value || 0;
+        if (!(odo > 0)) { toast('اكتب رقم العداد وقت التغيير'); return; }
+        const rec = {
+          id: uid(), createdAt: Date.now(), history: [{ ts: Date.now(), action: 'create' }],
+          date, odo, category: catKey, cost,
+          workshopName: '', workshopAddr: '', partBrand: '',
+          nextDueKm: iv.km ? odo + iv.km : null,
+          nextDueDate: iv.months ? addDays(date, iv.months * 30) : null,
+          faultDesc: '', repairDesc: '',
+          fromWallet: cost > 0 && w.querySelector('[data-f="fromWallet"]').checked,
+          notes: 'تسجيل سريع (تم التغيير)', receiptPhoto: ''
+        };
+        await DB.put('maintenance', rec);
+        if (odo > (+S.odo || 0)) { S.odo = odo; await saveSettings(); }
+        closeModal();
+        const nx = rec.nextDueKm ? ' — 📏 التغيير الجاي عند <bdi dir="ltr">' + fmtN(rec.nextDueKm) + '</bdi> كم' : '';
+        toast('✅ تم تسجيل التغيير' + nx, { duration: 7000 });
+        go('wallets');
+      };
+    } }
+  );
+}
 
 /* ---------- fuel purchase form ---------- */
 function openFuelForm(existing) {

@@ -265,6 +265,25 @@ function reminderFor(catKey, lastEntry, interval, currentOdo, today) {
   return { status, kmSince, daysSince, kmLeft, daysLeft };
 }
 
+/* ---------- maintenance due info (shared: wallets / settings / home / weekly nudge) ----------
+   level: 'missed' = عدادك عدّى الموعد (أحمر) • 'soon' = فاضل ≤500 كم أو ≤7 أيام (أخضر) • 'ok' */
+function maintDueInfo(ck, lastEntry, interval, currentOdo, today) {
+  const iv = interval;
+  if (!iv || (!iv.km && !iv.months)) return null;
+  let nextDueKm = null, nextDueDate = null, kmLeft = null, daysLeft = null;
+  if (lastEntry) {
+    if (iv.km && +lastEntry.odo > 0) { nextDueKm = +lastEntry.odo + iv.km; kmLeft = currentOdo ? nextDueKm - currentOdo : iv.km; }
+    else if (iv.km) kmLeft = iv.km;
+    if (iv.months) { nextDueDate = addDays(lastEntry.date, iv.months * 30); daysLeft = daysBetween(today, nextDueDate); }
+  } else {
+    if (iv.km) { kmLeft = iv.km; nextDueKm = null; }
+    if (iv.months) daysLeft = iv.months * 30;
+  }
+  const missed = (kmLeft !== null && kmLeft <= 0) || (daysLeft !== null && daysLeft <= 0);
+  const soon = !missed && ((kmLeft !== null && kmLeft <= 500) || (daysLeft !== null && daysLeft <= 7));
+  return { nextDueKm, nextDueDate, kmLeft, daysLeft, level: missed ? 'missed' : (soon ? 'soon' : 'ok'), last: lastEntry || null };
+}
+
 /* ---------- insights ---------- */
 function computeInsights(sessions) {
   const out = [];
