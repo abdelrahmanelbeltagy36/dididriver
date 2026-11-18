@@ -10,7 +10,8 @@ const TITLES = {
   analytics: 'التحليلات',
   archive: 'الأرشيف والصيانة',
   settings: 'الإعدادات',
-  feedback: 'اقتراحات ومشاكل'
+  feedback: 'اقتراحات ومشاكل',
+  onboard: 'أهلاً بك — نظّم عربيتك'
 };
 
 async function go(page, params) {
@@ -79,10 +80,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'system') applyTheme(); }); } catch (e) {}
   }
 
-  go('home');
-
-  /* 🔔 weekly maintenance nudge — once every 7 days on app open */
-  setTimeout(() => { weeklyNudge().catch(() => {}); }, 1500);
+  /* first-run onboarding — إلا لو جهاز قديم عنده بيانات أصلاً */
+  const obDone = await kvGet('onboarded', false);
+  const hasData = ((await DB.all('sessions')).length + (await DB.all('maintenance')).length) > 0;
+  if (!obDone && !hasData) {
+    go('onboard');
+  } else {
+    if (!obDone) await kvSet('onboarded', true); /* أجهزة موجودة قبل التحديث */
+    go('home');
+    /* 🔔 weekly maintenance nudge — once every 7 days on app open */
+    setTimeout(() => { weeklyNudge().catch(() => {}); }, 1500);
+  }
 
   /* service worker for offline + installability */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

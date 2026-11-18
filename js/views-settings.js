@@ -62,8 +62,13 @@ Views.settings = async function (root) {
     '<div class="t2" style="margin-bottom:10px">اكتب 0 في أي خانة = تذكير مقفول للنوع ده. اللي يحصل الأول (الكم أو الشهور) هو اللي يطلع التذكير.</div>' +
     CAT_LIST.map(ck => {
       const iv = S.intervals[ck];
+      const oilChips = (ck === 'oil' || ck === 'oilFilter')
+        ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">' +
+          OIL_PRESETS.map(p => '<button class="btn btn-sm' + (iv.km === p.km ? ' btn-pri' : '') + '" data-oilchip="' + ck + '" data-km="' + p.km + '" style="min-height:36px;padding:4px 10px"><bdi dir="ltr">' + p.label + '</bdi></button>').join('') +
+          '</div>' : '';
       return '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">' +
         '<div class="t1" style="font-weight:800;margin-bottom:4px">' + esc(CATS[ck]) + '</div>' +
+        oilChips +
         '<div class="grid2">' +
         '<div class="field" style="margin:0"><label style="color:var(--pri);font-weight:700">📏 كل كام كم</label>' +
         '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="km" value="' + (iv.km || 0) + '" placeholder="0 = بدون"></div>' +
@@ -242,6 +247,15 @@ function bindSettings(root) {
     await saveSettings();
     toast('✅ تم الحفظ');
   };
+
+  /* oil interval preset chips */
+  root.querySelectorAll('[data-oilchip]').forEach(b => b.onclick = () => {
+    const ck = b.dataset.oilchip;
+    const inp = root.querySelector('[data-iv="' + ck + '"][data-k="km"]');
+    inp.value = b.dataset.km;
+    root.querySelectorAll('[data-oilchip="' + ck + '"]').forEach(x => x.classList.toggle('btn-pri', x === b));
+    toast('اتظبطت على <bdi dir="ltr">' + fmtN(+b.dataset.km) + '</bdi> كم — اضغط 💾 حفظ الفترات تحت', { duration: 5000 });
+  });
 
   root.querySelector('#st-iv-save').onclick = async () => {
     root.querySelectorAll('[data-iv]').forEach(el => {

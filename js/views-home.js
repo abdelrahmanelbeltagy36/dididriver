@@ -47,6 +47,27 @@ Views.home = async function (root) {
 
   let html = '';
 
+  /* ---------- 📍 عداد سريع — في الواجهة مباشرة ---------- */
+  const odoNow = currentOdo(sessions, maints);
+  const odoMissed = [], odoSoon = [];
+  for (const ck of CAT_LIST) {
+    const info = maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odoNow, today);
+    if (!info) continue;
+    if (info.level === 'missed') odoMissed.push(CATS[ck]);
+    else if (info.level === 'soon') odoSoon.push(CATS[ck]);
+  }
+  html += '<div class="card" style="border-color:var(--res)"><div class="card-title">📍 عداد العربية<span class="spacer"></span>' +
+    (odoMissed.length ? '<span class="badge red">🔴 فاتك: ' + odoMissed.length + '</span>' : '') +
+    (odoSoon.length ? '<span class="badge green">🟢 قربت: ' + odoSoon.length + '</span>' : '') + '</div>' +
+    '<div style="display:flex;gap:8px;align-items:end">' +
+    '<div class="field" style="margin:0;flex:1"><label>مشيت كيلومترات جديدة؟ اكتب الرقم دلوقتي (كم)</label>' +
+    '<input class="input input-lg" type="number" inputmode="numeric" id="hm-odo" value="' + (+odoNow || '') + '" placeholder="مثال: 107200" dir="ltr" style="text-align:center;font-weight:800"></div>' +
+    '<button class="btn btn-pri" id="hm-odo-save" style="min-height:44px">تحديث ✓</button></div>' +
+    (odoMissed.length ? '<div class="t2" style="margin-top:8px;color:var(--neg);font-weight:700">🔴 فاتك تغيير: ' + odoMissed.map(n => esc(n)).join('، ') + ' — من خزنة العربية سجّلها</div>' : '') +
+    (odoSoon.length ? '<div class="t2" style="margin-top:6px;color:var(--pos);font-weight:700">🟢 قربت: ' + odoSoon.map(n => esc(n)).join('، ') + ' — فاضل 500 كم أو أقل</div>' : '') +
+    (odoNow ? '<div class="t2" style="margin-top:6px">بعد ما تحدث الرقم، كل المواعيد بتُحسب عليه فورًا — والتفاصيل في خزنة العربية.</div>' : '') +
+    '</div>';
+
   /* ---------- latest working day hero ---------- */
   if (latest) {
     const cur = dayStats(sessions, latest);
@@ -162,6 +183,21 @@ Views.home = async function (root) {
   }
 
   root.innerHTML = html;
+
+  /* quick odometer update */
+  const odoSave = root.querySelector('#hm-odo-save');
+  if (odoSave) odoSave.onclick = async () => {
+    const v = +root.querySelector('#hm-odo').value || 0;
+    if (!(v > 0)) { toast('اكتب رقم العداد'); return; }
+    if (v < (+S.odo || 0)) {
+      const ok = await confirmDlg({ title: 'الرقم أقل من المفوت؟', body: 'العداد المحفوظ <bdi dir="ltr">' + fmtN(S.odo) + '</bdi> وأنت كتبت <bdi dir="ltr">' + fmtN(v) + '</bdi>. هنعملها تحديث للرقم ده على أي حال.', okText: 'تحديث' });
+      if (!ok) return;
+    }
+    S.odo = v;
+    await saveSettings();
+    toast('✅ تم تحديث العداد — كل المواعيد اتحدثت');
+    go('home');
+  };
 
   /* Pro promo card */
   const promo = await proPromoCard();
