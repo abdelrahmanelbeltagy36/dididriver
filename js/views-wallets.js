@@ -1,0 +1,193 @@
+/* ===== views-wallets.js — خزنة العربية ===== */
+'use strict';
+
+Views.wallets = async function (root) {
+  root.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
+  const sessions = await DB.all('sessions');
+  const purchases = (await DB.all('purchases')).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt - a.createdAt));
+  const maints = await DB.all('maintenance');
+  const W = walletBalances(sessions, purchases, maints);
+  const mk = monthKey(todayStr());
+  const monthFuel = purchases.filter(p => monthKey(p.date) === mk).reduce((a, p) => a + (+p.amount || 0), 0);
+  const monthMaint = W.maintFromWallet.filter(m => monthKey(m.date) === mk).reduce((a, m) => a + (+m.cost || 0), 0);
+
+  function walletCard(title, icon, bal, inflow, outflow, monthOut, extra, cls, actions) {
+    return '<div class="card wallet-card"><div class="stripe ' + cls + '"></div>' +
+      '<div class="card-title">' + icon + ' ' + title + '<span class="spacer"></span>' + (actions || '') + '</div>' +
+      '<div class="stat big"><div class="lbl">الرصيد الحالي</div>' +
+      '<div class="big-val ' + (bal < 0 ? 'neg-t' : 'res-t') + '">' + money(bal) + '</div></div>' +
+      '<div class="kv"><span class="k">إجمالي المخصصات من الأيام</span><span class="v res-t">' + money(inflow) + '</span></div>' +
+      '<div class="kv"><span class="k">إجمالي المصروف الفعلي</span><span class="v neg-t">' + money(outflow) + '</span></div>' +
+      '<div class="kv"><span class="k">مصروف هذا الشهر (' + esc(monthName(mk)) + ')</span><span class="v">' + money(monthOut) + '</span></div>' +
+      extra + (bal < 0 ? '<div class="wallet-deficit">⚠️ عجز بالخزنة — تحتاج <bdi dir="ltr">' + fmtN(-bal) + '</bdi> ج.م إضافية. المصاريف الفعلية لا تُخصم من ربحك الشخصي مرة أخرى.</div>' : '') +
+      '</div>';
+  }
+
+  const fuelExtra =
+    '<div class="divider"></div>' +
+    '<div class="kv"><span class="k">التكلفة الفعلية للوقود لكل كم</span><span class="v">' +
+    (W.kmAll ? money(W.actualFuelPerKm) + ' <span class="small">/كم</span>' : '—') + '</span></div>' +
+    '<div class="kv"><span class="k">التكلفة المخططة (تقدير الإعدادات)</span><span class="v">' + money(S.l100 / 100 * S.fuelPrice) + ' <span class="small">/كم</span></span></div>';
+
+  const maintExtra =
+    '<div class="divider"></div>' +
+    '<div class="kv"><span class="k">آخر مصاريف مدفوعة من الخزنة</span><span class="v">' + fmtN(W.maintFromWallet.length) + ' عملية</span></div>';
+
+  let html = walletCard('خزنة البنزين', '⛽', W.fuelBal, W.fuelIn, W.fuelOut, monthFuel, fuelExtra, 'res-t',
+    '<button class="btn btn-sm btn-pri" id="fuel-add">＋ شراء وقود</button>') +
+    walletCard('خزنة الصيانة', '🔧', W.maintBal, W.maintIn, W.maintOut, monthMaint, maintExtra, 'res-t',
+    '<button class="btn btn-sm btn-pri" id="maint-add">＋ تسجيل صيانة</button>');
+
+  /* explanation card */
+  html += '<div class="card tight"><div class="t2" style="font-size:.8rem;line-height:1.8;color:var(--sub)">' +
+    'الرصيد = مجموع مخصصات الأيام − المشتريات الفعلية. حذف أي سجل يعكس التأثير تلقائيًا. ' +
+    'شراء الوقود وتسجيل الصيانة <b>يخصمان من الخزنة فقط</b> ولا يخصمان من الربح الشخصي مرة أخرى ' +
+    fInfo('لماذا؟', [
+      'الربح الشخصي اليومي = الدخل − المخصصات − المصاريف المباشرة.',
+      'المخصص يذهب إلى الخزنة كاحتياطي. عند الشراء الفعلي، الخزنة هي التي تدفع.',
+      'لو خصمنا الشراء من الربح أيضًا فسنحسب التكلفة مرتين — وهذا خطأ محاسبي.'
+    ]) + '</div></div>';
+
+  /* purchases history */
+  html += '<div class="card list-card"><div class="card-title" style="padding:12px 0 2px">⛽ سجل مشتريات الوقود</div>';
+  if (!purchases.length) {
+    html += '<div class="empty"><div class="d">لا توجد مشتريات بعد</div></div>';
+  } else {
+    html += purchases.map(p =>
+      '<div class="row-item">' +
+      '<div class="avatar-dot">⛽</div>' +
+      '<div class="grow"><div class="t1">' + esc(fullDayLabel(p.date)) + '</div>' +
+      '<div class="t2">' +
+      (p.liters ? fmtN(p.liters) + ' لتر • ' : '') +
+      (p.pricePerLiter ? fmtN(p.pricePerLiter) + ' ج.م/لتر • ' : '') +
+      (p.odo ? 'عداد ' + fmtN(p.odo) + ' • ' : '') +
+      (p.station ? esc(p.station) : '') +
+      '</div>' + (p.notes ? '<div class="t2">📝 ' + esc(p.notes) + '</div>' : '') + '</div>' +
+      '<div class="side neg-t">' + money(p.amount) + '<div style="margin-top:4px">' +
+      vBtn('purchases', p.id) + eBtn('edit-fuel') + dBtn('del-fuel', p.id) +
+      '<input type="hidden" data-pid="' + p.id + '"></div></div>' +
+      '</div>').join('');
+  }
+  html += '</div>';
+
+  /* maintenance paid from wallet — recent 5 */
+  const mPaid = W.maintFromWallet.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  html += '<div class="card list-card"><div class="card-title" style="padding:12px 0 2px">🔧 صيانة مدفوعة من الخزنة' +
+    '<span class="spacer"></span><button class="linklike" onclick="go(\'archive\')">كل السجل ←</button></div>';
+  if (!mPaid.length) html += '<div class="empty"><div class="d">لم تُسجل مصاريف صيانة مدفوعة من الخزنة بعد</div></div>';
+  else html += mPaid.map(m =>
+    '<div class="row-item">' +
+    '<div class="avatar-dot">🔧</div>' +
+    '<div class="grow"><div class="t1">' + esc(CATS[m.category] || m.category) + '</div>' +
+    '<div class="t2">' + esc(fullDayLabel(m.date)) + (m.workshopName ? ' • ' + esc(m.workshopName) : '') + '</div></div>' +
+    '<div class="side neg-t">' + money(m.cost) + '</div></div>').join('');
+  html += '</div>';
+
+  root.innerHTML = html;
+
+  root.querySelector('#fuel-add').onclick = () => openFuelForm(null);
+  root.querySelector('#maint-add').onclick = () => openMaintForm(null);
+
+  root.querySelectorAll('[data-pid]').forEach(inp => {
+    const id = inp.dataset.pid;
+    const card = inp.closest('.row-item');
+    card.querySelector('[data-act="view-rec"]').onclick = () => showRecHistory('purchases', id);
+    card.querySelectorAll('[data-act="edit-fuel"]').forEach(b => b.onclick = () => {
+      openFuelForm(purchases.find(p => p.id === id));
+    });
+    card.querySelectorAll('[data-act="del-fuel"]').forEach(b => b.onclick = () => {
+      const p = purchases.find(x => x.id === id);
+      confirmDelete('purchases', p, 'شراء وقود بمبلغ ' + fmtN(p.amount) + ' ج.م — ' + fullDayLabel(p.date));
+    });
+  });
+};
+
+/* ---------- fuel purchase form ---------- */
+function openFuelForm(existing) {
+  const isEdit = !!existing;
+  const d = existing || { date: todayStr(), amount: '', liters: '', pricePerLiter: S.fuelPrice, odo: +S.odo || '', station: '', notes: '' };
+  openModal(
+    '<div class="modal-title">' + (isEdit ? 'تعديل شراء وقود' : 'شراء وقود جديد') + '</div>' +
+    field('التاريخ', dateInput('date', d.date)) +
+    field('المبلغ المدفوع (ج.م)', numInput('amount', d.amount, '0', true)) +
+    '<div class="grid2">' +
+    field('عدد اللترات (اختياري)', numInput('liters', d.liters, '')) +
+    field('سعر اللتر', numInput('pricePerLiter', d.pricePerLiter, '')) +
+    '</div>' +
+    '<div class="grid2">' +
+    field('عداد المسافة (اختياري)', numInput('odo', d.odo, '')) +
+    field('المحطة (اختياري)', txtInput('station', d.station, '')) +
+    '</div>' +
+    field('ملاحظات', '<textarea class="input" data-f="notes" rows="2">' + esc(d.notes || '') + '</textarea>') +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="closeModal()">إلغاء</button>' +
+    '<button class="btn btn-pri" id="fuel-save">💾 حفظ</button></div>',
+    { onMount: w => { w.querySelector('#fuel-save').onclick = () => saveFuel(w, existing); } }
+  );
+}
+
+async function saveFuel(wrap, existing) {
+  const isEdit = !!existing;
+  const g = f => { const el = wrap.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; };
+  const amount = +g('amount');
+  if (!(amount > 0)) { toast('أدخل مبلغًا أكبر من صفر'); return; }
+  const rec = existing || { id: uid(), createdAt: Date.now(), history: [] };
+  rec.date = g('date') || todayStr();
+  rec.amount = amount;
+  rec.liters = +g('liters') || null;
+  rec.pricePerLiter = +g('pricePerLiter') || null;
+  rec.odo = +g('odo') || null;
+  rec.station = g('station');
+  rec.notes = g('notes');
+  rec.updatedAt = Date.now();
+  rec.history = (rec.history || []).concat([{ ts: Date.now(), action: existing ? 'edit' : 'create' }]);
+
+  await DB.put('purchases', rec);
+  if (rec.odo && rec.odo > (+S.odo || 0)) { S.odo = rec.odo; await saveSettings(); }
+
+  /* consumption suggestion from real observation */
+  if (rec.liters && rec.odo) {
+    const all = (await DB.all('purchases')).filter(p => p.odo && p.id !== rec.id && p.odo < rec.odo).sort((a, b) => b.odo - a.odo);
+    const prev = all[0];
+    if (prev) {
+      const kmDelta = rec.odo - prev.odo;
+      if (kmDelta > 50) {
+        const obs = (rec.liters / kmDelta) * 100;
+        if (Math.abs(obs - S.l100) / S.l100 > 0.12) {
+          toast('💡 من تعبئتك الفعلية: الاستهلاك ≈ <bdi dir="ltr">' + fmtN(obs) + '</bdi> لتر/100كم (الإعداد حاليًا ' + fmtN(S.l100) + ')', { duration: 9000, actionLabel: 'تحديث', onAction: () => { S.l100 = Math.round(obs * 10) / 10; saveSettings().then(() => toast('✅ تم تحديث متوسط الاستهلاك')); } });
+        }
+      }
+    }
+  }
+
+  closeModal();
+  toast(isEdit ? '✅ تم تعديل الشراء' : '✅ تم تسجيل الشراء — خصم من خزنة البنزين');
+  go('wallets');
+}
+
+/* ---------- shared delete with undo ---------- */
+async function confirmDelete(store, rec, desc) {
+  const ok = await confirmDlg({
+    title: 'حذف السجل؟',
+    body: '<b>' + esc(desc) + '</b><br><br>سيُنقل السجل إلى سلة المهملات لمدة 30 يومًا مع إمكانية الاستعادة، وسيظهر زر تراجع فورًا.',
+    okText: '🗑️ حذف', danger: true
+  });
+  if (!ok) return;
+  await moveToTrash(store, rec, desc);
+  toast('🗑️ تم النقل إلى سلة المهملات: ' + esc(desc), { actionLabel: 'تراجع', onAction: async () => {
+    const items = await DB.all('trash');
+    const t = items.find(x => x.origId === rec.id && x.store === store);
+    if (t) { await restoreFromTrash(t); toast('↩️ تم التراجع عن الحذف'); go(Nav.current); }
+  } });
+  go(Nav.current);
+}
+
+/* record edit history viewer */
+async function showRecHistory(store, id) {
+  const rec = await DB.get(store, id);
+  if (!rec) { toast('السجل موجود في سلة المهملات'); return; }
+  const h = rec.history || [];
+  showFormula('🕘 سجل التعديلات', h.length ? h.map(x =>
+    esc(new Date(x.ts).toLocaleString('en-GB')) + ' — ' + esc(x.action === 'create' ? 'إنشاء' : x.action === 'edit' ? 'تعديل' : (x.by || x.action))
+  ) : ['لا توجد تعديلات مسجلة']);
+}

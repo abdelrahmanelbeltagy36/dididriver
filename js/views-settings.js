@@ -1,0 +1,417 @@
+/* ===== views-settings.js — الإعدادات + اختبار المحاسبة + النسخ + السلة + المقترحات ===== */
+'use strict';
+
+let ST = { photoTmp: '' };
+
+Views.settings = async function (root) {
+  root.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
+  const mk = monthKey(todayStr());
+
+  let html = '';
+
+  /* ---------- vehicle ---------- */
+  html += '<div class="card"><div class="card-title">🚗 العربية</div>' +
+    field('اسم العربية', '<input class="input" id="st-vehicle" value="' + esc(S.vehicleName) + '">') +
+    '<div class="grid2">' +
+    field('رقم اللوحة (اختياري)', '<input class="input" id="st-plate" value="' + esc(S.plate) + '">') +
+    field('عداد المسافة الحالي (كم)', '<input class="input" id="st-odo" type="number" inputmode="decimal" value="' + (+S.odo || 0) + '">') +
+    '</div>' +
+    '<div class="field"><label>صورة العربية (اختياري)</label><div style="display:flex;gap:8px;align-items:center">' +
+    ((ST.photoTmp || S.photo) ? '<img class="photo-thumb" id="st-photo-prev" src="' + (ST.photoTmp || S.photo) + '">' : '') +
+    '<button class="btn btn-sm" id="st-photo-btn">📷 صورة</button></div></div>' +
+    '<button class="btn btn-pri btn-block" id="st-vehicle-save">💾 حفظ بيانات العربية</button></div>';
+
+  /* ---------- fuel & reserves ---------- */
+  html += '<div class="card"><div class="card-title">⛽ الوقود والمخصصات</div>' +
+    '<div class="grid2">' +
+    field('نوع الوقود', '<input class="input" id="st-fueltype" value="' + esc(S.fuelType) + '">') +
+    field('سعر اللتر (ج.م)', '<input class="input" id="st-fuelprice" type="number" step="any" inputmode="decimal" value="' + S.fuelPrice + '">') +
+    '</div>' +
+    '<div class="grid2">' +
+    field('متوسط الاستهلاك (لتر/100 كم)', '<input class="input" id="st-l100" type="number" step="any" inputmode="decimal" value="' + S.l100 + '">' +
+      '<div class="t2">يُحدَّث تلقائيًا من مشتريات الوقود الحقيقية عند طلب ذلك</div>') +
+    field('مخصص الصيانة (ج.م/كم)', '<input class="input" id="st-maintkm" type="number" step="any" inputmode="decimal" value="' + S.maintPerKm + '">') +
+    '</div>' +
+    '<div class="formula" style="margin-bottom:10px">' +
+    'تكلفة الوقود/كم = ' + fmtN(S.l100) + ' ÷ 100 × ' + fmtN(S.fuelPrice) + ' = <b>' + fmtN(S.l100 / 100 * S.fuelPrice) + ' ج.م</b><br>' +
+    'إجمالي المخصص/كم = <b>' + fmtN(S.l100 / 100 * S.fuelPrice + S.maintPerKm) + ' ج.م</b> (وقود + صيانة)</div>' +
+    '<div class="t2" style="margin-bottom:10px">⚠️ تغيير الإعدادات يؤثر على الأيام الجديدة فقط — كل سجل محفوظ يحتفظ بلقطة إعداداته الخاصة للأبد.</div>' +
+    '<button class="btn btn-pri btn-block" id="st-fuel-save">💾 حفظ إعدادات الوقود</button></div>';
+
+  /* ---------- commissions & target ---------- */
+  html += '<div class="card"><div class="card-title">📱 العمولات وهدف الأيام</div>' +
+    '<div class="grid2">' +
+    field('عمولة ديدي %', '<input class="input" id="st-c-didi" type="number" step="any" inputmode="decimal" value="' + S.commission.didi + '">') +
+    field('عمولة أوبر %', '<input class="input" id="st-c-uber" type="number" step="any" inputmode="decimal" value="' + S.commission.uber + '">') +
+    '</div>' +
+    '<div class="grid2">' +
+    field('عمولة أخرى %', '<input class="input" id="st-c-other" type="number" step="any" inputmode="decimal" value="' + S.commission.other + '">') +
+    field('هدف أيام العمل شهريًا', '<input class="input" id="st-target" type="number" inputmode="decimal" value="' + S.targetDays + '">') +
+    '</div>' +
+    '<button class="btn btn-pri btn-block" id="st-target-save">💾 حفظ</button></div>';
+
+  /* ---------- intervals ---------- */
+  html += '<div class="card"><div class="card-title">🔧 فترات الصيانة' +
+    '<span class="spacer"></span><span class="badge gray">كل قيمة 0 = بدون تذكير</span></div>' +
+    CAT_LIST.map(ck => {
+      const iv = S.intervals[ck];
+      return '<div class="grid2" style="align-items:end">' +
+        '<div class="field"><label>' + esc(CATS[ck]) + '</label></div>' +
+        '<div style="display:flex;gap:6px;padding-bottom:12px">' +
+        '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="km" value="' + (iv.km || 0) + '" title="كم" placeholder="كم">' +
+        '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="months" value="' + (iv.months || 0) + '" title="شهور" placeholder="شهور">' +
+        '</div></div>';
+    }).join('') +
+    '<div class="t2" style="margin:4px 0 10px">العمود الأول: كل كم كام • الثاني: كل شهور</div>' +
+    '<button class="btn btn-pri btn-block" id="st-iv-save">💾 حفظ الفترات</button></div>';
+
+  /* ---------- appearance ---------- */
+  html += '<div class="card"><div class="card-title">🎨 المظهر</div>' +
+    field('نمط العرض', '<select class="input" id="st-theme">' +
+      options([{ v: 'system', l: 'حسب النظام (تلقائي)' }, { v: 'light', l: 'فاتح' }, { v: 'dark', l: 'غامق' }], S.theme) + '</select>') +
+    '</div>';
+
+  /* ---------- accounting test ---------- */
+  html += '<div class="card"><div class="card-title">🧪 اختبار المحاسبة' +
+    '<span class="spacer"></span><button class="btn btn-sm btn-pri" id="st-test-run">▶ تشغيل الاختبار</button></div>' +
+    '<div class="t2" style="margin-bottom:8px">اختبار ذاتي للتأكد أن كل الحسابات صحيحة: دخل صافي 1,012 ج.م، 160 كم، لتر 22.25، استهلاك 8 ل/100كم، صيانة 2 ج.م/كم — ثم شراء بنزين 300 وتغيير زيت 1,200 للتأكد أنهما يخصمان من الخزنتين فقط.</div>' +
+    '<div id="test-result"></div></div>';
+
+  /* ---------- backup & export ---------- */
+  html += '<div class="card"><div class="card-title">💾 نسخ احتياطي وتصدير</div>' +
+    '<div class="btn-row">' +
+    '<button class="btn btn-sm btn-pri" id="bk-json">⬇️ نسخة JSON كاملة</button>' +
+    '<button class="btn btn-sm" id="bk-import">⬆️ استعادة JSON</button>' +
+    '</div>' +
+    '<div class="btn-row" style="margin-top:8px">' +
+    '<button class="btn btn-sm" id="bk-days-csv">أيام CSV</button>' +
+    '<button class="btn btn-sm" id="bk-days-xls">أيام Excel</button>' +
+    '<button class="btn btn-sm" id="bk-maint-csv">صيانة CSV</button>' +
+    '<button class="btn btn-sm" id="bk-maint-xls">صيانة Excel</button>' +
+    '</div>' +
+    '<input type="file" id="bk-file" accept=".json,application/json" style="display:none">' +
+    '</div>';
+
+  /* ---------- trash ---------- */
+  const trash = (await DB.all('trash')).sort((a, b) => b.deletedAt - a.deletedAt);
+  html += '<div class="card"><div class="card-title">🗑️ سلة المهملات (' + trash.length + ')<span class="spacer"></span><span class="badge gray">تُحتفظ 30 يومًا</span></div>';
+  if (!trash.length) html += '<div class="empty"><div class="d">لا يوجد شيء في السلة</div></div>';
+  else {
+    html += trash.map(t => '<div class="row-item">' +
+      '<div class="avatar-dot">🗑️</div>' +
+      '<div class="grow"><div class="t1">' + esc(t.describe || t.origId) + '</div>' +
+      '<div class="t2">حُذف: ' + esc(new Date(t.deletedAt).toLocaleString('en-GB')) + '</div></div>' +
+      '<div class="side"><button class="btn btn-sm" data-restore="' + t.id + '">↩️ استعادة</button>' +
+      '<button class="btn btn-sm btn-danger" data-purge="' + t.id + '" style="margin-top:4px">حذف نهائي</button></div>' +
+      '</div>').join('');
+  }
+  html += '</div>';
+
+  /* ---------- feedback link ---------- */
+  html += '<div class="card tight"><div class="row-item">' +
+    '<div class="avatar-dot">💬</div><div class="grow"><div class="t1">اقتراحات ومشاكل</div>' +
+    '<div class="t2">أرسل مقترحًا أو بلّغ عن مشكلة وراجع رسائلك السابقة</div></div>' +
+    '<button class="btn btn-sm btn-pri" onclick="go(\'feedback\')">فتح ←</button></div></div>';
+
+  /* ---------- Pro ---------- */
+  const seller = await getSellerInfo();
+  html += '<div class="card"><div class="card-title">💎 النسخة الكاملة (Pro)<span class="spacer"></span>' +
+    (isPro() ? '<span class="badge green">مفعّلة ✓</span>' : '<span class="badge gray">نسخة مجانية</span>') + '</div>' +
+    proStatusLine() +
+    proBenefits().map(b => '<div class="kv"><span class="v" style="text-align:right;font-weight:600">' + b + '</span></div>').join('') +
+    '<div class="divider"></div>';
+
+  if (!isPro()) {
+    if (!PRO_STATE.trialStart) {
+      html += '<button class="btn btn-pos btn-block" id="st-pro-trial">🎁 ابدأ أول 30 يوم مجانًا</button>' +
+        '<div class="t2" style="margin:6px 0 10px;text-align:center">كل الميزات مجانًا شهر كامل — بدون دفع وبدون كود</div>';
+    }
+    html += '<div class="field"><label>لديك كود تفعيل؟ (شهري أو سنوي)</label>' +
+      '<input class="input" id="st-pro-code" placeholder="DISPM-XXXX-XXXX أو DISPY-XXXX-XXXX" dir="ltr" style="text-align:center;letter-spacing:1px"></div>' +
+      '<div class="btn-row"><button class="btn btn-pri" id="st-pro-activate">💎 تفعيل</button>' +
+      '<button class="btn" id="st-pro-buy">🛒 كيف أشتري؟ (30 ج/شهر — 200 ج/سنة)</button></div>' +
+      '<div class="divider"></div>';
+  }
+
+  /* developer-only: payment contact shown to customers in the buy screen */
+  html += '<div class="t2" style="font-weight:800;margin-bottom:6px">إعدادات البائع (رقمك محمّل داخل التطبيق مسبقًا — عدّل فقط لو تغيّر)</div>' +
+    '<div class="grid2">' +
+    field('رقم فودافون كاش', '<input class="input" id="st-si-vf" value="' + esc(seller.vf || '') + '" placeholder="' + esc(PRO_SELLER_DEFAULT.vf) + '" dir="ltr">') +
+    field('واتساب / تواصل', '<input class="input" id="st-si-wa" value="' + esc(seller.wa || '') + '" placeholder="' + esc(PRO_SELLER_DEFAULT.wa) + '" dir="ltr">') +
+    '</div>' +
+    field('سعر مخصص (يظهر مكان 30/200 لو مكتوب)', '<input class="input" id="st-si-price" value="' + esc(seller.price || '') + '" placeholder="اتركه فاضي للأسعار القياسية" dir="ltr">') +
+    '<button class="btn btn-pri btn-block" id="st-si-save">💾 حفظ بيانات البائع</button>' +
+    '<div class="t2" style="margin-top:8px">💡 لتوليد أكواد جديدة: شغّل <b>node tools/make-codes.js</b> — الأكواد تُحفظ في ملف سري.</div>' +
+    '</div>';
+
+  /* ---------- disclaimer ---------- */
+  html += '<div class="card tight"><div class="t2" style="line-height:1.9">📌 <b>إخلاء مسؤولية:</b> هذا التطبيق أداة تسجيل وتنظيم شخصي لدخل ومصاريف السائق. هو <b>ليس</b> استشارة مالية أو ضريبية أو محاسبية، ولا بديل عن المحاسب أو المحامي. كل الحسابات حسب الإعدادات التي تدخلها بنفسك.</div>' +
+    '<div class="t2" style="margin-top:8px;color:var(--sub)">الإصدار 1.0.0 • التخزين محلي على جهازك 100% (IndexedDB) — لا شيء يُرسل لأي سيرفر.</div></div>';
+
+  root.innerHTML = html;
+  bindSettings(root);
+  bindTrash(root, trash);
+};
+
+function bindSettings(root) {
+  root.querySelector('#st-photo-btn').onclick = () => pickImage(d => {
+    ST.photoTmp = d;
+    const prev = root.querySelector('#st-photo-prev');
+    if (prev) prev.src = d;
+    else root.querySelector('#st-photo-btn').insertAdjacentHTML('beforebegin', '<img class="photo-thumb" id="st-photo-prev" src="' + d + '">');
+  });
+
+  root.querySelector('#st-vehicle-save').onclick = async () => {
+    S.vehicleName = root.querySelector('#st-vehicle').value || S.vehicleName;
+    S.plate = root.querySelector('#st-plate').value;
+    S.odo = +root.querySelector('#st-odo').value || 0;
+    if (ST.photoTmp) { S.photo = ST.photoTmp; ST.photoTmp = ''; }
+    await saveSettings();
+    toast('✅ تم حفظ بيانات العربية');
+  };
+
+  root.querySelector('#st-fuel-save').onclick = async () => {
+    S.fuelType = root.querySelector('#st-fueltype').value || S.fuelType;
+    S.fuelPrice = +root.querySelector('#st-fuelprice').value || S.fuelPrice;
+    S.l100 = +root.querySelector('#st-l100').value || S.l100;
+    S.maintPerKm = +root.querySelector('#st-maintkm').value || S.maintPerKm;
+    await saveSettings();
+    toast('✅ تم الحفظ — الأيام الجديدة ستستخدم الإعدادات الجديدة');
+    go('settings');
+  };
+
+  root.querySelector('#st-target-save').onclick = async () => {
+    S.commission.didi = +root.querySelector('#st-c-didi').value || 0;
+    S.commission.uber = +root.querySelector('#st-c-uber').value || 0;
+    S.commission.other = +root.querySelector('#st-c-other').value || 0;
+    S.targetDays = +root.querySelector('#st-target').value || 26;
+    await saveSettings();
+    toast('✅ تم الحفظ');
+  };
+
+  root.querySelector('#st-iv-save').onclick = async () => {
+    root.querySelectorAll('[data-iv]').forEach(el => {
+      S.intervals[el.dataset.iv][el.dataset.k] = +el.value || 0;
+    });
+    await saveSettings();
+    toast('✅ تم حفظ فترات الصيانة');
+  };
+
+  root.querySelector('#st-theme').addEventListener('change', async e => {
+    S.theme = e.target.value;
+    await saveSettings();
+    applyTheme();
+  });
+
+  /* Pro */
+  const trialBtn = root.querySelector('#st-pro-trial');
+  if (trialBtn) trialBtn.onclick = async () => {
+    const ok = await startTrial();
+    if (ok) go('settings');
+  };
+  const actBtn = root.querySelector('#st-pro-activate');
+  if (actBtn) actBtn.onclick = async () => {
+    const ok = await activatePro(root.querySelector('#st-pro-code').value);
+    if (ok) go('settings');
+  };
+  const buyBtn = root.querySelector('#st-pro-buy');
+  if (buyBtn) buyBtn.onclick = () => upgradeModal('');
+  root.querySelector('#st-si-save').onclick = async () => {
+    await saveSellerInfo({
+      vf: root.querySelector('#st-si-vf').value.trim(),
+      wa: root.querySelector('#st-si-wa').value.trim(),
+      price: root.querySelector('#st-si-price').value.trim()
+    });
+    toast('✅ تم الحفظ — سيظهر هذا الرقم للعملاء بدل الرقم المدمج');
+  };
+
+  root.querySelector('#st-test-run').onclick = () => {
+    const res = runAccountingTest();
+    const box = root.querySelector('#test-result');
+    box.innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>الخطوة</th><th>المتوقع</th><th>النتيجة</th><th></th></tr></thead><tbody>' +
+      res.rows.map(r => '<tr><td>' + r.label + '</td><td><bdi dir="ltr">' + fmtN(r.exp) + '</bdi></td>' +
+        '<td class="' + (r.pass ? 'pos-t' : 'neg-t') + '"><bdi dir="ltr">' + fmtN(r.got) + '</bdi></td>' +
+        '<td>' + (r.pass ? '<span class="badge green">✓</span>' : '<span class="badge red">✗ فشل</span>') + '</td></tr>').join('') +
+      '</tbody></table></div>' +
+      '<div class="' + (res.pass ? 'warn-strip" style="background:var(--pos-soft);color:var(--pos)' : 'warn-strip') + '">' +
+      (res.pass ? '✅ نجح الاختبار بالكامل — الحسابات والمحاسبة سليمة: الشراءات تخصم من الخزنتين فقط ولا تمس الربح الشخصي.' : '❌ فشل الاختبار — راجع الصفوف الحمراء') +
+      '</div>' +
+      '<div class="t2" style="margin-top:6px">بعد شراء بنزين بـ 300 ج.م: خزنة البنزين = <bdi dir="ltr">284.80 − 300 = -15.20</bdi> (عجز يظهر بالأحمر). بعد تغيير زيت بـ 1,200: خزنة الصيانة = <bdi dir="ltr">320 − 1200 = -880</bdi> (عجز). الربح الشخصي يبقى <bdi dir="ltr">407.20</bdi> ج.م.</div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  /* backup */
+  root.querySelector('#bk-json').onclick = async () => {
+    const data = { app: 'driver-income', version: 1, exportedAt: new Date().toISOString() };
+    for (const s of DB.STORES) data[s] = await DB.all(s);
+    download('driver-income-backup-' + todayStr() + '.json', JSON.stringify(data, null, 2), 'application/json');
+    toast('✅ تم تنزيل النسخة الاحتياطية — احتفظ بها في مكان آمن');
+  };
+
+  const fileInp = root.querySelector('#bk-file');
+  root.querySelector('#bk-import').onclick = () => fileInp.click();
+  fileInp.addEventListener('change', async () => {
+    const f = fileInp.files && fileInp.files[0];
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (!data || data.app !== 'driver-income') { toast('الملف ليس نسخة احتياطية من هذا التطبيق'); return; }
+      const ok = await confirmDlg({
+        title: 'استعادة نسخة احتياطية؟',
+        body: 'سيتم <b>استبدال كل البيانات الحالية</b> بمحتوى الملف (' +
+          [data.sessions, data.purchases, data.maintenance].map(x => (x || []).length).join(' + ') + ' سجل). لا يمكن التراجع.',
+        okText: 'استبدال الكل', danger: true, requireDouble: true
+      });
+      if (!ok) return;
+      for (const s of DB.STORES) {
+        await DB.clear(s);
+        if (Array.isArray(data[s])) await DB.bulkPut(s, data[s]);
+      }
+      await loadSettings();
+      applyTheme();
+      toast('✅ تمت الاستعادة بنجاح');
+      go('home');
+    } catch (e) {
+      toast('تعذر قراءة الملف: ' + esc(e.message));
+    }
+    fileInp.value = '';
+  });
+
+  root.querySelector('#bk-days-csv').onclick = async () => {
+    const sessions = await DB.all('sessions');
+    const rows = sessions.sort((a, b) => a.date.localeCompare(b.date)).map(s => {
+      const c = calcSession(s);
+      return [s.date, PLATFORMS[s.platform] || s.platform, s.mode, s.amount,
+        Math.round(c.commission * 100) / 100, Math.round(c.effNet * 100) / 100, s.tips, s.tipsIncluded ? 'داخل الدخل' : 'منفصل',
+        s.km, s.hours, s.trips, s.directExpenses,
+        Math.round(c.fuelRes * 100) / 100, Math.round(c.maintRes * 100) / 100, Math.round(c.profit * 100) / 100,
+        Math.round(c.margin * 10) / 10, s.odoStart || '', s.odoEnd || '', s.notes || ''];
+    });
+    download('كل-الأيام.csv', toCSV([['التاريخ', 'التطبيق', 'نوع الدخل', 'المبلغ', 'عمولة', 'صافي فعلي', 'بقشيش', 'البقشيش', 'كم', 'ساعات', 'رحلات', 'مصاريف مباشرة', 'مخصص وقود', 'مخصص صيانة', 'ربح شخصي', 'هامش %', 'عداد من', 'عداد إلى', 'ملاحظات'], ...rows]), 'text/csv;charset=utf-8');
+  };
+  root.querySelector('#bk-days-xls').onclick = () => {
+    if (!requirePro('تصدير Excel')) return;
+    (async () => {
+    const sessions = await DB.all('sessions');
+    const rows = sessions.sort((a, b) => a.date.localeCompare(b.date)).map(s => {
+      const c = calcSession(s);
+      return [s.date, PLATFORMS[s.platform] || s.platform, s.mode, s.amount,
+        Math.round(c.commission * 100) / 100, Math.round(c.effNet * 100) / 100, s.km, s.hours, s.trips,
+        Math.round(c.profit * 100) / 100, Math.round(c.margin * 10) / 10, s.notes || ''];
+    });
+    download('كل-الأيام.xls', xlsDoc('كل السجلات اليومية', ['التاريخ', 'التطبيق', 'نوع', 'مبلغ', 'عمولة', 'صافي', 'كم', 'ساعات', 'رحلات', 'ربح', 'هامش %', 'ملاحظات'], rows), 'application/vnd.ms-excel');
+    })();
+  };
+  root.querySelector('#bk-maint-csv').onclick = async () => {
+    const maints = await DB.all('maintenance');
+    const rows = maints.sort((a, b) => a.date.localeCompare(b.date)).map(m => [m.date, CATS[m.category] || m.category, m.odo, m.cost, m.workshopName || '', m.partBrand || '', m.faultDesc || '', m.repairDesc || '', m.fromWallet ? 'من الخزنة' : 'خارجية', m.notes || '']);
+    download('كل-الصيانة.csv', toCSV([['التاريخ', 'النوع', 'العداد', 'التكلفة', 'الورشة', 'القطعة', 'وصف العطل', 'الإصلاح', 'الدفع', 'ملاحظات'], ...rows]), 'text/csv;charset=utf-8');
+  };
+  root.querySelector('#bk-maint-xls').onclick = () => {
+    if (!requirePro('تصدير Excel')) return;
+    (async () => {
+    const maints = await DB.all('maintenance');
+    const rows = maints.sort((a, b) => a.date.localeCompare(b.date)).map(m => [m.date, CATS[m.category] || m.category, m.odo, m.cost, m.workshopName || '', m.faultDesc || '', m.repairDesc || '']);
+    download('كل-الصيانة.xls', xlsDoc('سجل الصيانة الكامل', ['التاريخ', 'النوع', 'العداد', 'التكلفة', 'الورشة', 'وصف العطل', 'الإصلاح'], rows), 'application/vnd.ms-excel');
+    })();
+  };
+}
+
+function bindTrash(root, trash) {
+  root.querySelectorAll('[data-restore]').forEach(b => b.onclick = async () => {
+    const t = trash.find(x => x.id === b.dataset.restore);
+    if (!t) return;
+    await restoreFromTrash(t);
+    toast('↩️ تمت الاستعادة');
+    go('settings');
+  });
+  root.querySelectorAll('[data-purge]').forEach(b => b.onclick = async () => {
+    const t = trash.find(x => x.id === b.dataset.purge);
+    if (!t) return;
+    const ok = await confirmDlg({
+      title: 'حذف نهائي؟',
+      body: '<b>' + esc(t.describe || '') + '</b><br><br>سيُحذف السجل للأبد ولا يمكن استعادته أو التراجع.',
+      okText: 'حذف نهائي', danger: true, requireDouble: true, doubleText: '⚠️ متأكد نهائيًا؟ اضغط ثانية'
+    });
+    if (!ok) return;
+    await DB.del('trash', t.id);
+    toast('تم الحذف نهائيًا');
+    go('settings');
+  });
+}
+
+/* ---------- accounting test ---------- */
+function runAccountingTest() {
+  const fuelPrice = 22.25, l100 = 8, maint = 2, km = 160, net = 1012;
+  const fck = (l100 / 100) * fuelPrice;        /* 1.78 */
+  const fuel = km * fck;                        /* 284.80 */
+  const mnt = km * maint;                       /* 320.00 */
+  const total = fuel + mnt;                     /* 604.80 */
+  const profit = net - total;                   /* 407.20 */
+  const fuelAfterPurchase = fuel - 300;         /* -15.20 deficit */
+  const maintAfterOil = mnt - 1200;             /* -880 deficit */
+  const profitAfterBoth = profit;               /* unchanged 407.20 */
+  const T = 0.005;
+  const rows = [
+    { label: 'تكلفة الوقود لكل كم (8÷100×22.25)', got: fck, exp: 1.78 },
+    { label: 'مخصص الوقود (160 كم)', got: fuel, exp: 284.80 },
+    { label: 'مخصص الصيانة (160 كم × 2)', got: mnt, exp: 320.00 },
+    { label: 'إجمالي المخصصات', got: total, exp: 604.80 },
+    { label: 'الربح الشخصي المتاح (1012 − 604.80)', got: profit, exp: 407.20 },
+    { label: 'خزنة البنزين بعد شراء 300 (عجز متوقع)', got: fuelAfterPurchase, exp: -15.20 },
+    { label: 'خزنة الصيانة بعد تغيير زيت 1,200 (عجز متوقع)', got: maintAfterOil, exp: -880 },
+    { label: 'الربح الشخصي بعد الشراءين — يجب ألا يتغير', got: profitAfterBoth, exp: 407.20 }
+  ];
+  rows.forEach(r => { r.pass = Math.abs(r.got - r.exp) < T; });
+  return { rows, pass: rows.every(r => r.pass) };
+}
+
+/* ================= feedback view ================= */
+Views.feedback = async function (root) {
+  root.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
+  const items = (await DB.all('feedback')).sort((a, b) => b.ts - a.ts);
+  const CATFB = { idea: 'اقتراح', bug: 'مشكلة', change: 'تعديل' };
+
+  let html = '<div class="card"><div class="card-title">💬 اقتراحات ومشاكل</div>' +
+    field('النوع', '<select class="input" id="fb-cat">' +
+      options([{ v: 'idea', l: 'اقتراح 💡' }, { v: 'bug', l: 'مشكلة 🐞' }, { v: 'change', l: 'طلب تعديل ✏️' }], 'idea') + '</select>') +
+    field('نص الرسالة', '<textarea class="input" id="fb-text" rows="4" placeholder="اكتب اقتراحك أو المشكلة بالتفصيل…"></textarea>') +
+    '<div class="btn-row"><button class="btn btn-pri" id="fb-send">إرسال</button>' +
+    '<button class="btn" id="fb-export">📤 تصدير كنص (للمطور)</button></div></div>';
+
+  html += '<div class="card list-card"><div class="card-title" style="padding:12px 0 2px">رسائلك السابقة (' + items.length + ')</div>';
+  if (!items.length) html += '<div class="empty"><div class="d">لا توجد رسائل بعد</div></div>';
+  else html += items.map(it =>
+    '<div class="row-item" style="align-items:flex-start">' +
+    '<div class="avatar-dot">' + (CATFB[it.category] || '').slice(0, 1) + '</div>' +
+    '<div class="grow"><div class="t1">' + esc(CATFB[it.category] || it.category) + '</div>' +
+    '<div class="t2">' + esc(new Date(it.ts).toLocaleString('en-GB')) + '</div>' +
+    '<div class="t2" style="line-height:1.7;white-space:pre-wrap">' + esc(it.text) + '</div></div>' +
+    '<div class="side"><button class="btn btn-sm btn-danger" data-fbdel="' + it.id + '">🗑️</button></div>' +
+    '</div>').join('');
+  html += '</div>';
+  root.innerHTML = html;
+
+  root.querySelector('#fb-send').onclick = async () => {
+    const text = root.querySelector('#fb-text').value.trim();
+    if (!text) { toast('اكتب الرسالة أولًا'); return; }
+    await DB.put('feedback', { id: uid(), ts: Date.now(), category: root.querySelector('#fb-cat').value, text });
+    toast('✅ تم حفظ رسالتك');
+    go('feedback');
+  };
+
+  root.querySelector('#fb-export').onclick = async () => {
+    const all = (await DB.all('feedback')).sort((a, b) => a.ts - b.ts);
+    if (!all.length) { toast('لا توجد رسائل للتصدير'); return; }
+    const txt = 'اقتراحات ومشاكل — تطبيق إدارة دخل السائق\n' + new Date().toLocaleString('en-GB') + '\n' +
+      '────────────────────────\n\n' +
+      all.map(it => '[' + (CATFB[it.category] || it.category) + '] ' + new Date(it.ts).toLocaleString('en-GB') + '\n' + it.text).join('\n\n────────────────────────\n\n');
+    download('مقترحات-ومشاكل.txt', txt, 'text/plain;charset=utf-8');
+  };
+
+  root.querySelectorAll('[data-fbdel]').forEach(b => b.onclick = async () => {
+    await DB.del('feedback', b.dataset.fbdel);
+    toast('تم الحذف');
+    go('feedback');
+  });
+};
