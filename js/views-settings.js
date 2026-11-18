@@ -51,19 +51,50 @@ Views.settings = async function (root) {
     '<button class="btn btn-pri btn-block" id="st-target-save">💾 حفظ</button></div>';
 
   /* ---------- intervals ---------- */
-  html += '<div class="card"><div class="card-title">🔧 فترات الصيانة' +
-    '<span class="spacer"></span><span class="badge gray">كل قيمة 0 = بدون تذكير</span></div>' +
+  const ivSessions = await DB.all('sessions');
+  const ivMaints = await DB.all('maintenance');
+  const ivOdo = currentOdo(ivSessions, ivMaints);
+  const ivToday = todayStr();
+  html += '<div class="card"><div class="card-title">🔧 فترات الصيانة والتذكيرات</div>' +
+    '<div class="t2" style="margin-bottom:8px">التطبيق يحسب لك <b>متى تحتاج تغيير كل حاجة</b> على عداد عربيتك الحقيقي:' +
+    ' كل ما تسجّل عملية صيانة (تغيير زيت مثلًا) في سجل الصيانة واكتب رقم العداد وقتها،' +
+    ' يبدأ العد من جديد ويقولك <b>باقي كام كم</b> على التغيير الجديد — تلقائيًا بضاعة.</div>' +
+    '<div class="tbl-wrap" style="margin-bottom:6px"><table class="tbl"><thead><tr>' +
+    '<th>نوع الصيانة</th><th>كل كام كم</th><th>أقصى مدة (شهور)</th></tr></thead><tbody>' +
     CAT_LIST.map(ck => {
       const iv = S.intervals[ck];
-      return '<div class="grid2" style="align-items:end">' +
-        '<div class="field"><label>' + esc(CATS[ck]) + '</label></div>' +
-        '<div style="display:flex;gap:6px;padding-bottom:12px">' +
-        '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="km" value="' + (iv.km || 0) + '" title="كم" placeholder="كم">' +
-        '<input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="months" value="' + (iv.months || 0) + '" title="شهور" placeholder="شهور">' +
-        '</div></div>';
+      return '<tr>' +
+        '<td style="white-space:nowrap">' + esc(CATS[ck]) + '</td>' +
+        '<td><input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="km" value="' + (iv.km || 0) + '" placeholder="0 = بدون"></td>' +
+        '<td><input class="input" type="number" inputmode="decimal" data-iv="' + ck + '" data-k="months" value="' + (iv.months || 0) + '" placeholder="0 = بدون"></td>' +
+        '</tr>';
     }).join('') +
-    '<div class="t2" style="margin:4px 0 10px">العمود الأول: كل كم كام • الثاني: كل شهور</div>' +
-    '<button class="btn btn-pri btn-block" id="st-iv-save">💾 حفظ الفترات</button></div>';
+    '</tbody></table></div>' +
+    '<div class="t2" style="margin:2px 0 10px">اكتب 0 في أي خانة = تذكير مقفول للنوع ده. اللي يحصل الأول (الكم أو الشهور) هو اللي يطلع التذكير.</div>' +
+    '<div class="divider"></div>' +
+    '<div class="t2" style="font-weight:800;margin-bottom:6px">📍 حالة عربيتك دلوقتي (حسب عدادك الحالي: <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi> كم)</div>' +
+    CAT_LIST.filter(ck => { const iv = S.intervals[ck]; return iv && (iv.km || iv.months); }).map(ck => {
+      const iv = S.intervals[ck];
+      const last = ivMaints.filter(m => m.category === ck && !m.deleted).sort((a, b) => b.date.localeCompare(a.date))[0];
+      const r = reminderFor(ck, last, iv, ivOdo, ivToday);
+      let line;
+      if (!last) {
+        line = '<span class="badge gray">لسه مفيش تسجيل</span> أول ما تغيّر <b>' + esc(CATS[ck]) + '</b> سجّلها في سجل الصيانة وهبدأ أعدّ لك من ساعتها';
+      } else {
+        const parts = [];
+        if (r.kmLeft !== null) parts.push('باقي <bdi dir="ltr">' + fmtN(Math.max(0, r.kmLeft)) + '</bdi> كم (النيكسة عند <bdi dir="ltr">' + fmtN((+last.odo || 0) + iv.km) + '</bdi>)');
+        if (r.daysLeft !== null) parts.push('أو بعد <bdi dir="ltr">' + Math.max(0, Math.round(r.daysLeft / 30)) + '</bdi> شهر تقريبًا');
+        const badge = r.status === 'overdue' ? '<span class="badge red">متأخرة الآن ⚠️</span>'
+          : r.status === 'due' ? '<span class="badge orange">مستحقة قريبًا 🔔</span>'
+          : r.status === 'soon' ? '<span class="badge orange">قربت</span>'
+          : '<span class="badge green">تمام ✓</span>';
+        line = badge + ' ' + parts.join(' — ') +
+          '<div class="t2">آخر مرة: ' + esc(last.date) + (last.odo ? ' عند عداد <bdi dir="ltr">' + fmtN(last.odo) + '</bdi> كم' : '') + '</div>';
+      }
+      return '<div class="kv" style="align-items:start"><span class="k" style="white-space:nowrap">' + esc(CATS[ck]) + '</span>' +
+        '<span class="v" style="text-align:right;font-weight:500">' + line + '</span></div>';
+    }).join('') +
+    '<button class="btn btn-pri btn-block" id="st-iv-save" style="margin-top:10px">💾 حفظ الفترات</button></div>';
 
   /* ---------- appearance ---------- */
   html += '<div class="card"><div class="card-title">🎨 المظهر</div>' +
@@ -132,21 +163,31 @@ Views.settings = async function (root) {
       '<button class="btn" id="st-pro-buy">🛒 كيف أشتري؟ (30 ج/شهر — 200 ج/سنة)</button></div>' +
       '<div class="divider"></div>';
   }
+  html += '</div>'; /* close Pro card */
 
-  /* developer-only: payment contact shown to customers in the buy screen */
-  html += '<div class="t2" style="font-weight:800;margin-bottom:6px">إعدادات البائع (رقمك محمّل داخل التطبيق مسبقًا — عدّل فقط لو تغيّر)</div>' +
-    '<div class="grid2">' +
-    field('رقم فودافون كاش', '<input class="input" id="st-si-vf" value="' + esc(seller.vf || '') + '" placeholder="' + esc(PRO_SELLER_DEFAULT.vf) + '" dir="ltr">') +
-    field('واتساب / تواصل', '<input class="input" id="st-si-wa" value="' + esc(seller.wa || '') + '" placeholder="' + esc(PRO_SELLER_DEFAULT.wa) + '" dir="ltr">') +
-    '</div>' +
-    field('سعر مخصص (يظهر مكان 30/200 لو مكتوب)', '<input class="input" id="st-si-price" value="' + esc(seller.price || '') + '" placeholder="اتركه فاضي للأسعار القياسية" dir="ltr">') +
-    '<button class="btn btn-pri btn-block" id="st-si-save">💾 حفظ بيانات البائع</button>' +
-    '<div class="t2" style="margin-top:8px">💡 لتوليد أكواد جديدة: شغّل <b>node tools/make-codes.js</b> — الأكواد تُحفظ في ملف سري.</div>' +
-    '</div>';
+  /* developer-only: admin seller panel — hidden; revealed by 7 taps on the version line */
+  if (ST.admin) {
+    html += '<div class="card" style="border-color:var(--res)"><div class="card-title">🔐 لوحة الأدمن (لك فقط)<span class="spacer"></span><span class="badge orange">سرية</span></div>' +
+      '<div class="t2" style="margin-bottom:6px">الرقم هنا هو اللي يظهر لكل عملائك في شاشة الشراء (محمّل مسبقًا داخل التطبيق — عدّل فقط لو تغيّر)</div>' +
+      '<div class="grid2">' +
+      field('رقم فودافون كاش', '<input class="input" id="st-si-vf" value="' + esc(seller.vf || '') + '" placeholder="' + esc(PRO_SELLER_DEFAULT.vf) + '" dir="ltr">') +
+      field('واتساب / تواصل', '<input class="input" id="st-si-wa" value="' + esc(seller.wa || '') + '" placeholder="' + esc(PRO_SELLER_DEFAULT.wa) + '" dir="ltr">') +
+      '</div>' +
+      field('سعر مخصص (يظهر مكان 30/200 لو مكتوب)', '<input class="input" id="st-si-price" value="' + esc(seller.price || '') + '" placeholder="اتركه فاضي للأسعار القياسية" dir="ltr">') +
+      '<button class="btn btn-pri btn-block" id="st-si-save">💾 حفظ بيانات البائع</button>' +
+      '<div class="divider"></div>' +
+      '<div class="t2" style="font-weight:800;margin-bottom:6px">🔑 الأكواد المتاحة</div>' +
+      '<div class="grid2">' +
+      '<div class="kv"><span class="k">🗓️ شهرية</span><span class="v"><bdi dir="ltr">' + proValidCodes().m.length + '</bdi> كود</span></div>' +
+      '<div class="kv"><span class="k">📅 سنوية</span><span class="v"><bdi dir="ltr">' + proValidCodes().y.length + '</bdi> كود</span></div>' +
+      '</div>' +
+      '<div class="t2" style="margin-top:8px">الأكواد نفسها في ملف سري على جهاز الكمبيوتر عندك (license-codes-PRIVATE.txt) — مش موجودة هنا كلام مفتوح لسبب أمان.</div>' +
+      '</div>';
+  }
 
   /* ---------- disclaimer ---------- */
   html += '<div class="card tight"><div class="t2" style="line-height:1.9">📌 <b>إخلاء مسؤولية:</b> هذا التطبيق أداة تسجيل وتنظيم شخصي لدخل ومصاريف السائق. هو <b>ليس</b> استشارة مالية أو ضريبية أو محاسبية، ولا بديل عن المحاسب أو المحامي. كل الحسابات حسب الإعدادات التي تدخلها بنفسك.</div>' +
-    '<div class="t2" style="margin-top:8px;color:var(--sub)">الإصدار 1.0.0 • التخزين محلي على جهازك 100% (IndexedDB) — لا شيء يُرسل لأي سيرفر.</div></div>';
+    '<div class="t2" id="st-ver" style="margin-top:8px;color:var(--sub);cursor:default">الإصدار 1.0.0 • التخزين محلي على جهازك 100% (IndexedDB) — لا شيء يُرسل لأي سيرفر.</div></div>';
 
   root.innerHTML = html;
   bindSettings(root);
@@ -154,6 +195,17 @@ Views.settings = async function (root) {
 };
 
 function bindSettings(root) {
+  /* 🔐 secret admin unlock: 7 taps on the version line */
+  const ver = root.querySelector('#st-ver');
+  if (ver) {
+    let taps = 0, tmo = null;
+    ver.addEventListener('click', () => {
+      clearTimeout(tmo);
+      tmo = setTimeout(() => { taps = 0; }, 2000);
+      if (++taps >= 7) { taps = 0; ST.admin = !ST.admin; go('settings'); }
+    });
+  }
+
   root.querySelector('#st-photo-btn').onclick = () => pickImage(d => {
     ST.photoTmp = d;
     const prev = root.querySelector('#st-photo-prev');
@@ -216,7 +268,8 @@ function bindSettings(root) {
   };
   const buyBtn = root.querySelector('#st-pro-buy');
   if (buyBtn) buyBtn.onclick = () => upgradeModal('');
-  root.querySelector('#st-si-save').onclick = async () => {
+  const siSave = root.querySelector('#st-si-save');
+  if (siSave) siSave.onclick = async () => {
     await saveSellerInfo({
       vf: root.querySelector('#st-si-vf').value.trim(),
       wa: root.querySelector('#st-si-wa').value.trim(),
