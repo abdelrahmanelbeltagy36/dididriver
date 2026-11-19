@@ -5,6 +5,12 @@ on:
     # كل ساعة — السكربت بيشيك على وقت القاهرة ويبعت بس الساعة 10 و4
     - cron: '0 * * * *'
   workflow_dispatch: # عشان تقدر تجرّبه يدويًا من تبويب Actions
+    inputs:
+      force_test:
+        description: 'ابعت إشعار اختبار دلوقتي (بغض النظر عن الوقت)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   send:
@@ -20,3 +26,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          FORCE_SEND: ${{ inputs.force_test }}

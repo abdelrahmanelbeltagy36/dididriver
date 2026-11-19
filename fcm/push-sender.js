@@ -91,15 +91,17 @@ async function sendFcm(accessToken, projectId, token, slot) {
       return;
     }
     const hour = cairoHour();
-    console.log('Cairo hour =', hour);
-    if (hour !== 10 && hour !== 16) { console.log('Not a reminder hour — skip'); return; }
+    const force = String(process.env.FORCE_SEND || '').toLowerCase() === 'true';
+    console.log('Cairo hour =', hour, force ? '(force test)' : '');
+    if (!force && hour !== 10 && hour !== 16) { console.log('Not a reminder hour — skip'); return; }
+    const slot = (hour === 10 || hour === 16) ? hour : 16;
 
     const sa = JSON.parse(SA_JSON);
     const [accessToken, tokens] = await Promise.all([getAccessToken(sa), fetchTokens()]);
     let sent = 0, failed = 0;
     for (const row of tokens) {
       if (!row.token) continue;
-      const r = await sendFcm(accessToken, sa.project_id, row.token, hour);
+      const r = await sendFcm(accessToken, sa.project_id, row.token, slot);
       if (r.ok) { sent++; console.log('✅ sent to', row.user_id); }
       else {
         failed++;
