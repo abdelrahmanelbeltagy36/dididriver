@@ -11,8 +11,8 @@ Views.maint = async function (root) {
   const today = todayStr();
   const est = estimatedCostPerKm(sessions, [], maints);
 
-  const routine = ROUTINE_CATS.map(ck => {
-    const iv = S.intervals[ck] || {};
+  const routine = allCatKeys().filter(ck => maintKind({ category: ck }) === 'routine').map(ck => {
+    const iv = intervalOf(ck) || {};
     const last = latestMaint(maints, ck);
     const info = maintDueInfo(ck, last, iv, odo, today);
     const before = last ? (last.prevCost !== undefined ? last.prevCost : ((previousMaint(maints, ck, last.id) || {}).cost || 0)) : 0;
@@ -53,7 +53,9 @@ Views.maint = async function (root) {
 
   /* ---------- 1) صيانة دورية ---------- */
   html += '<div class="card list-card"><div class="card-title" style="padding:12px 0 2px">🔁 صيانة دورية' +
-    '<span class="spacer"></span><button class="btn btn-sm btn-pos" id="maint-add">＋ صيانة جديدة</button></div>';
+    '<span class="spacer"></span>' +
+    '<button class="btn btn-sm" id="maint-custom" style="margin-left:4px">＋ فئة مخصصة</button>' +
+    '<button class="btn btn-sm btn-pos" id="maint-add">＋ صيانة جديدة</button></div>';
 
   for (const r of routine) {
     const { ck, iv, last, info, before } = r;
@@ -81,7 +83,7 @@ Views.maint = async function (root) {
 
     html += '<div class="row-item" style="align-items:flex-start">' +
       '<div class="avatar-dot">' + (info && info.level === 'missed' ? '🚨' : info && info.level === 'soon' ? '🟢' : '🔁') + '</div>' +
-      '<div class="grow"><div class="t1">' + badge + ' <b>' + esc(CATS[ck]) + '</b></div>' +
+      '<div class="grow"><div class="t1">' + badge + ' <b>' + esc(catLabel(ck)) + '</b></div>' +
       '<div class="t2" style="line-height:1.9">' +
       (period.length ? '⏱️ ' + period.join(' — ') + '<br>' : '') +
       (line.length ? line.join(' — ') + '<br>' : '') +
@@ -99,7 +101,7 @@ Views.maint = async function (root) {
   if (!faults.length) html += '<div class="empty"><div class="d">لا توجد أعطال مسجّلة — لو حصلك عطل أو خبطة سجّلها هنا لوحدها (مش هتتحسب في أسعار الزيت والفلاتر)</div></div>';
   else html += faults.map(m =>
     '<div class="row-item" style="align-items:flex-start"><div class="avatar-dot">🩹</div>' +
-    '<div class="grow"><div class="t1"><b>' + esc(CATS[m.category] || m.category) + '</b> <span class="badge gray">' + esc(fullDayLabel(m.date)) + '</span></div>' +
+    '<div class="grow"><div class="t1"><b>' + esc(maintName(m)) + '</b> <span class="badge gray">' + esc(fullDayLabel(m.date)) + '</span></div>' +
     '<div class="t2" style="line-height:1.8">عداد <bdi dir="ltr">' + fmtN(m.odo) + '</bdi> • 💰 دفعت <b>' + money(m.cost || 0) + '</b>' +
     (m.workshopName ? ' • ' + esc(m.workshopName) : '') + '</div>' +
     (m.faultDesc ? '<div class="t2"><b>العطل:</b> ' + esc(m.faultDesc) + '</div>' : '') +
@@ -115,6 +117,7 @@ Views.maint = async function (root) {
 
   root.querySelector('#maint-edit-odo').onclick = () => openQuickOdoModal();
   root.querySelector('#maint-add').onclick = () => openMaintForm(null, lastMaintPrefill(maints));
+  root.querySelector('#maint-custom').onclick = () => openAddCustomCat();
   root.querySelector('#fault-add').onclick = () => openFaultForm(null);
   root.querySelectorAll('[data-done]').forEach(b => b.onclick = () => quickMaintDone(b.dataset.done, { backTo: 'maint' }));
   root.querySelectorAll('[data-editlast]').forEach(b => b.onclick = () => {
@@ -127,7 +130,7 @@ Views.maint = async function (root) {
   });
   root.querySelectorAll('[data-delfault]').forEach(b => b.onclick = () => {
     const rec = maints.find(m => m.id === b.dataset.delfault);
-    if (rec) confirmDelete('maintenance', rec, CATS[rec.category] + ' — ' + (rec.date || ''));
+    if (rec) confirmDelete('maintenance', rec, maintName(rec) + ' — ' + (rec.date || ''));
   });
 };
 
@@ -139,6 +142,38 @@ function lastMaintPrefill(maints) {
   return { workshopName: last.workshopName || '', workshopAddr: last.workshopAddr || '', partBrand: last.partBrand || '', notes: last.notes || '' };
 }
 
+/* فئة صيانة دورية بيعرّفها المستخدم بنفسه ومتتحفظ مع الباقين */
+function openAddCustomCat() {
+  openModal(
+    '<div class="modal-title">＋ صيانة دورية جديدة</div>' +
+    '<div class="t2" style="margin-bottom:10px">هتظهر في جدول الصيانة والفواتير والتنبيهات زي أي نوع ثابت — اكتب اسمها وفترتها مرة واحدة وبس.</div>' +
+    field('اسم الصيانة (مثلاً: تيلور، سير، مكيف…)', txtInput('name', '', 'اكتب اسمها…')) +
+    '<div class="grid2">' +
+    field('📏 كل كام كم', numInput('km', '', 'مثال: 10000')) +
+    field('⏱️ أو أقصى مدة (شهور)', numInput('months', '', 'مثال: 12')) +
+    '</div>' +
+    '<div class="t2">اكتب 0 في خانة = بدون تذكير بالكم/بالشهور.</div>' +
+    '<div class="modal-actions"><button class="btn" onclick="closeModal()">إلغاء</button>' +
+    '<button class="btn btn-pri" id="cc-save">💾 إضافة</button></div>',
+    { onMount: w => {
+      w.querySelector('#cc-save').onclick = async () => {
+        const g = f => { const el = w.querySelector('[data-f="' + f + '"]'); return el ? el.value.trim() : ''; };
+        const name = g('name');
+        if (!name) { toast('اكتب اسم الصيانة'); return; }
+        const km = +g('km') || 0, months = +g('months') || 0;
+        if (!km && !months) { toast('اكتب فترة بالكم أو بالشهور عشان نفكّرك'); return; }
+        if (!S.customCats) S.customCats = {};
+        const key = 'c' + uid();
+        S.customCats[key] = { name, km, months };
+        await saveSettings();
+        closeModal();
+        toast('✅ أُضيفت «' + esc(name) + '» لجدول الصيانة');
+        go(Nav.current);
+      };
+    } }
+  );
+}
+
 /* فورم مستقل للأعطال — مش بتتحسب في أسعار الصيانة الدورية */
 function openFaultForm(existing) {
   const isEdit = !!existing;
@@ -147,7 +182,7 @@ function openFaultForm(existing) {
       .sort((a, b) => (+b.updatedAt || +b.createdAt || 0) - (+a.updatedAt || +a.createdAt || 0))[0];
     const d = Object.assign({
       date: todayStr(), odo: +S.odo || '', category: 'fault', cost: '',
-      workshopName: '', workshopAddr: '', partBrand: '', faultDesc: '', repairDesc: '', notes: '', receiptPhoto: ''
+      workshopName: '', workshopAddr: '', partBrand: '', customName: '', faultDesc: '', repairDesc: '', notes: '', receiptPhoto: ''
     }, existing || (lastFault ? {
       workshopName: lastFault.workshopName || '', workshopAddr: lastFault.workshopAddr || '',
       partBrand: lastFault.partBrand || '', notes: lastFault.notes || ''
@@ -161,6 +196,9 @@ function openFaultForm(existing) {
       field('عداد المسافة (كم)', numInput('odo', d.odo, '', true)) +
       field('النوع', '<select class="input" data-f="category">' + options(FAULT_CATS.map(k => ({ v: k, l: CATS[k] })), d.category) + '</select>') +
       '</div>' +
+      '<div id="fault-custom-row" style="' + (d.category === 'other' ? '' : 'display:none') + '">' +
+      field('اسم الصيانة / العطل (بدل «أخرى»)', txtInput('customName', d.customName, 'اكتب الاسم اللي يفرّقك')) +
+      '</div>' +
       field('اللي دفعته (ج.م — اختياري)', numInput('cost', d.cost, '0')) +
       '<div class="grid2">' +
       field('الورشة / المكان', txtInput('workshopName', d.workshopName, '')) +
@@ -172,6 +210,9 @@ function openFaultForm(existing) {
       '<div class="modal-actions"><button class="btn" onclick="closeModal()">إلغاء</button>' +
       '<button class="btn btn-pri" id="fault-save">💾 حفظ</button></div>',
       { onMount: w => {
+        const catSel = w.querySelector('[data-f="category"]');
+        const customRow = w.querySelector('#fault-custom-row');
+        catSel.addEventListener('change', () => { customRow.style.display = catSel.value === 'other' ? '' : 'none'; });
         w.querySelector('#fault-save').onclick = async () => {
           const g = f => { const el = w.querySelector('[data-f="' + f + '"]'); return el ? el.value.trim() : ''; };
           const odo = +g('odo') || 0;
@@ -183,7 +224,7 @@ function openFaultForm(existing) {
           rec.kind = 'fault';
           rec.cost = +g('cost') || 0;
           rec.workshopName = g('workshopName'); rec.workshopAddr = g('workshopAddr');
-          rec.partBrand = g('partBrand'); rec.faultDesc = g('faultDesc');
+          rec.partBrand = g('partBrand'); rec.customName = g('customName'); rec.faultDesc = g('faultDesc');
           rec.repairDesc = g('repairDesc'); rec.notes = g('notes');
           rec.fromWallet = false; rec.nextDueKm = null; rec.nextDueDate = null;
           rec.updatedAt = Date.now();

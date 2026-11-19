@@ -61,11 +61,11 @@ Views.home = async function (root) {
   /* ---------- 📍 عداد سريع — في الواجهة مباشرة ---------- */
   const odoNow = currentOdo(sessions, maints);
   const odoMissed = [], odoSoon = [];
-  for (const ck of CAT_LIST) {
-    const info = maintDueInfo(ck, latestMaint(maints, ck), S.intervals[ck], odoNow, today);
+  for (const ck of allCatKeys()) {
+    const info = maintDueInfo(ck, latestMaint(maints, ck), intervalOf(ck), odoNow, today);
     if (!info) continue;
-    if (info.level === 'missed') odoMissed.push(CATS[ck]);
-    else if (info.level === 'soon') odoSoon.push(CATS[ck]);
+    if (info.level === 'missed') odoMissed.push(catLabel(ck));
+    else if (info.level === 'soon') odoSoon.push(catLabel(ck));
   }
   html += '<div class="card" style="border-color:var(--res)"><div class="card-title">📍 عداد العربية<span class="spacer"></span>' +
     (odoMissed.length ? '<span class="badge red">🔴 فاتك: ' + odoMissed.length + '</span>' : '') +
@@ -167,11 +167,11 @@ Views.home = async function (root) {
   }
   const odo = currentOdo(sessions, maints);
   const missedNames = [], soonNames = [];
-  for (const ck of CAT_LIST) {
-    const info = maintDueInfo(ck, latestMaint(maints, ck), S.intervals[ck], odo, today);
+  for (const ck of allCatKeys()) {
+    const info = maintDueInfo(ck, latestMaint(maints, ck), intervalOf(ck), odo, today);
     if (!info) continue;
-    if (info.level === 'missed') missedNames.push(CATS[ck]);
-    else if (info.level === 'soon') soonNames.push(CATS[ck]);
+    if (info.level === 'missed') missedNames.push(catLabel(ck));
+    else if (info.level === 'soon') soonNames.push(catLabel(ck));
   }
   for (const n of missedNames) warns.push('<div class="warn-strip" style="background:var(--neg-soft);color:var(--neg)">🔴 <b>' + esc(n) + '</b> — فاتك تغييرها! عدادك عدّى موعدها. غيّرها وسجّلها من خزنة العربية</div>');
   for (const n of soonNames) warns.push('<div class="warn-strip" style="background:var(--pos-soft);color:var(--pos)">🟢 <b>' + esc(n) + '</b> — قرب موعدها (فاضل 500 كم أو أقل) جهّز نفسك</div>');

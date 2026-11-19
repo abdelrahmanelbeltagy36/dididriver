@@ -151,8 +151,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     } else {
       if (!obDone) await kvSet('onboarded', true); /* أجهزة موجودة قبل التحديث */
       go('home');
-      /* 🔔 مراجعة الصيانة كل 3 أيام أول ما تفتح التطبيق */
-      setTimeout(() => { weeklyNudge().catch(() => {}); }, 1500);
+      /* ⏰ إشعار تسجيل العداد كل يوم الساعة 4 العصر */
+      setTimeout(() => { dailyNudge().catch(() => {}); }, 1500);
     }
     if (quickOdo) setTimeout(() => {
       try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -175,9 +175,9 @@ async function dueItems() {
   const odo = currentOdo(sessions, maints);
   const today = todayStr();
   const all = [];
-  for (const ck of CAT_LIST) {
+  for (const ck of allCatKeys()) {
     const last = latestMaint(maints, ck);
-    const info = maintDueInfo(ck, last, S.intervals[ck], odo, today);
+    const info = maintDueInfo(ck, last, intervalOf(ck), odo, today);
     all.push({ ck, info });
   }
   return { items: all.filter(x => x.info && x.info.level !== 'ok'), all, odo };
@@ -224,7 +224,7 @@ async function notifyDueItems(opts) {
     const prev = await kvGet(key, '');
     if (!opts.force && prev === info.level) continue; /* ما نكررش نفس التنبيه */
     const missed = info.level === 'missed';
-    const name = CATS[ck];
+    const name = catLabel(ck);
     const title = (missed ? '🔴 ' : '🟢 ') + 'تغيير ' + name + (missed ? ' فات' : ' قرب');
     const where = info.nextDueKm !== null ? ' (الموعد عند <bdi dir="ltr">' + fmtN(info.nextDueKm) + '</bdi> كم)' : '';
     const body = missed
@@ -241,32 +241,58 @@ async function notifyDueItems(opts) {
   return sent;
 }
 
-/* المراجعة الدورية — كل 3 أيام بالظبط */
-async function weeklyNudge() {
-  const last = +(await kvGet('lastNudgeTs', 0)) || 0;
-  if (Date.now() - last < 3 * 86400000) return;
-  await kvSet('lastNudgeTs', Date.now());
-  const { items } = await dueItems();
-  /* بناديها دايمًا — حتى لو مفيش حاجة — عشان نصفّر حالات اللي رجعت تمام */
-  const sent = await notifyDueItems({ force: true });
-  if (!items.length) return; /* الساكت لما مفيش حاجة */
-  if (sent || Nav.current !== 'home') return;
+/* =================⏰ إشعار تسجيل العداد — كل يوم الساعة 4 العصر ================= */
+let odoReminderTimer = null;
 
-  /* fallback: إشعار داخل التطبيق لو صلاحية الإشعارات مش مفعّلة */
-  const missed = items.filter(x => x.info.level === 'missed').map(x => CATS[x.ck]);
-  const soon = items.filter(x => x.info.level === 'soon').map(x => CATS[x.ck]);
-  const parts = [];
-  if (missed.length) parts.push('🔴 فاتك: ' + missed.join('، '));
-  if (soon.length) parts.push('🟢 قربت: ' + soon.join('، '));
-  toast(parts.join(' — ') + ' — اضغط فتح للتسجيل', { duration: 9000, actionLabel: 'فتح 🔧', onAction: () => go('wallets') });
+async function sendDailyOdoReminder() {
+  if (S.notifications === false) return false;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+  const body = 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك. اضغط «تحديث العداد» واكتب الرقم في ثانية.';
+  return await showMaintNotification('📍 وقت تسجيل الكيلومتر', body, 'daily-odo-' + todayStr());
 }
+
+/* لو التطبيق مفتوح قبل الرابعة: نعمل تايمر لحد الساعة 4 */
+function scheduleOdoReminder() {
+  if (odoReminderTimer) return;
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0);
+  if (target <= now) return;
+  const ms = target - now;
+  if (ms > 2147483647) return; /* حد setTimeout */
+  odoReminderTimer = setTimeout(() => {
+    odoReminderTimer = null;
+    dailyNudge();
+  }, ms);
+}
+
+async function dailyNudge() {
+  const today = todayStr();
+  const lastDay = await kvGet('lastOdoNudgeDay', '');
+  if (lastDay === today) { scheduleOdoReminder(); return; }
+  const now = new Date();
+  if (now.getHours() < 16) { scheduleOdoReminder(); return; } /* لسه ما جتش الساعة 4 */
+
+  await kvSet('lastOdoNudgeDay', today);
+  const sent = await sendDailyOdoReminder();
+  /* إشعار منفصل لكل حاجة قربت أو فاتت — والساكت لو مفيش */
+  await notifyDueItems();
+
+  if (!sent && Nav.current === 'home') {
+    toast('📍 الساعة 4 — سجّل عدادك النهاردة', {
+      duration: 9000, actionLabel: 'تحديث العداد', onAction: () => openQuickOdoModal()
+    });
+  }
+}
+
+/* اسم قديم للـ boot/README */
+const weeklyNudge = dailyNudge;
 
 /* تفعيل إشعارات الصيانة (بيُطلب من الإعدادات أو بعد الترحيب) */
 async function enableNotifications(ask) {
   if (!('Notification' in window)) { toast('المتصفح ده مش بيدعم الإشعارات'); return false; }
   if (Notification.permission === 'granted') {
     S.notifications = true; await saveSettings();
-    toast('✅ الإشعارات مفعّلة — كل 3 أيام هنبعتلك تنبيه بكل حاجة قربت أو فاتت');
+    toast('✅ الإشعارات مفعّلة — كل يوم الساعة 4 العصر هنبعتلك تنبيه تسجيل العداد');
     return true;
   }
   if (Notification.permission === 'denied') {

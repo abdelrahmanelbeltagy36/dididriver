@@ -24,7 +24,28 @@ const CATS = {
 const CAT_LIST = Object.keys(CATS);
 /* الصيانة الدورية = اللي ليها موعد متكرر. الباقي أعطال/إصلاحات */
 const ROUTINE_CATS = ['oil', 'oilFilter', 'airFilter', 'fuelFilter', 'tires', 'brakes', 'battery'];
-function maintKind(m) { return (m && m.kind) || (ROUTINE_CATS.indexOf(m && m.category) >= 0 ? 'routine' : 'fault'); }
+
+function maintKind(m) {
+  if (m && m.kind) return m.kind;
+  const ck = m && m.category;
+  return (ROUTINE_CATS.indexOf(ck) >= 0 || !!(S.customCats && S.customCats[ck])) ? 'routine' : 'fault';
+}
+/* كل الأنواع: الثابتة + اللي المستخدم عرّفها */
+function allCatKeys() { return CAT_LIST.concat(Object.keys(S.customCats || {})); }
+function catLabel(ck) {
+  const c = (S.customCats || {})[ck];
+  return c ? (c.name || 'صيانة مخصصة') : (CATS[ck] || ck);
+}
+function intervalOf(ck) {
+  const c = (S.customCats || {})[ck];
+  return c ? { km: +c.km || 0, months: +c.months || 0 } : S.intervals[ck];
+}
+/* اسم الصيانة في السجل — لو "أخرى" بيستخدم الاسم اللي كتبه المستخدم */
+function maintName(m) {
+  if (!m) return '';
+  if (m.customName) return m.customName;
+  return catLabel(m.category);
+}
 
 const DEFAULT_INTERVALS = {
   oil:         { km: 5000,  months: 6 },
@@ -45,7 +66,7 @@ const DEFAULT_INTERVALS = {
 
 const DEFAULT_SETTINGS = {
   mode: 'driver',              /* 'driver' = ديدي/أوبر • 'daily' = قيادة يومية (مصاريف بس) */
-  notifications: true,         /* إشعارات الصيانة كل 3 أيام */
+  notifications: true,         /* إشعار تسجيل العداد كل يوم 4 العصر */
   vehicleName: 'تويوتا كورولا 2008',
   plate: '',
   odo: 0,
@@ -57,6 +78,7 @@ const DEFAULT_SETTINGS = {
   commission: { didi: 15, uber: 25, other: 0 },
   targetDays: 26,
   intervals: DEFAULT_INTERVALS,
+  customCats: {},                 /* صيانات دورية بيعرّفها المستخدم بنفسه */
   theme: 'system'
 };
 

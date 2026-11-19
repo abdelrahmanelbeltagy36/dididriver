@@ -95,7 +95,7 @@ Views.wallets = async function (root) {
   else html += mPaid.map(m =>
     '<div class="row-item">' +
     '<div class="avatar-dot">🔧</div>' +
-    '<div class="grow"><div class="t1">' + esc(CATS[m.category] || m.category) + '</div>' +
+    '<div class="grow"><div class="t1">' + esc(maintName(m)) + '</div>' +
     '<div class="t2">' + esc(fullDayLabel(m.date)) + (m.workshopName ? ' • ' + esc(m.workshopName) : '') + '</div></div>' +
     '<div class="side neg-t">' + money(m.cost) + '</div></div>').join('');
   html += '</div>';
@@ -103,7 +103,7 @@ Views.wallets = async function (root) {
   /* ---------- 🔧 maintenance schedule — quick "تم التغيير" per item ---------- */
   const odoNow = currentOdo(sessions, maints);
   const today = todayStr();
-  const dueCats = CAT_LIST.map(ck => ({ ck, info: maintDueInfo(ck, latestMaint(maints, ck), S.intervals[ck], odoNow, today) }))
+  const dueCats = allCatKeys().map(ck => ({ ck, info: maintDueInfo(ck, latestMaint(maints, ck), intervalOf(ck), odoNow, today) }))
     .filter(x => x.info);
   const order = { missed: 0, soon: 1, ok: 2 };
   dueCats.sort((a, b) => order[a.info.level] - order[b.info.level]);
@@ -131,7 +131,7 @@ Views.wallets = async function (root) {
       }
       html += '<div class="row-item" style="align-items:flex-start">' +
         '<div class="avatar-dot">' + (info.level === 'missed' ? '🚨' : info.level === 'soon' ? '🟢' : '🔧') + '</div>' +
-        '<div class="grow"><div class="t1">' + badge + ' ' + esc(CATS[ck]) + '</div>' +
+        '<div class="grow"><div class="t1">' + badge + ' ' + esc(catLabel(ck)) + '</div>' +
         '<div class="t2" style="line-height:1.8">' + line +
         (info.last ? '<br>آخر مرة: ' + esc(fullDayLabel(info.last.date)) + (info.last.odo ? ' عند عداد <bdi dir="ltr">' + fmtN(info.last.odo) + '</bdi>' : '') : '<br>لسه مفيش تسجيل — أول ما تغير سجلها') +
         '</div></div>' +
@@ -179,7 +179,7 @@ async function quickMaintDone(catKey, opts) {
     return lines.join('<br>') || 'النوع ده بدون فترة محددة';
   };
   openModal(
-    '<div class="modal-title">✅ تم تغيير ' + esc(CATS[catKey]) + '</div>' +
+    '<div class="modal-title">✅ تم تغيير ' + esc(catLabel(catKey)) + '</div>' +
     '<div class="t2" style="margin-bottom:8px">سجّل التغيير وسيبدأ العد من جديد تلقائيًا — وعداد عربيتك الرئيسي هيتحدث لوحة</div>' +
     field('التاريخ (غيرته إمتى؟)', dateInput('date', todayStr())) +
     field('عداد المسافة وقت التغيير (كم)', numInput('odo', odoDef, 'رقم العداد دلوقتي', true)) +

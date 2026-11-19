@@ -258,7 +258,7 @@ async function renderMaintTab(body) {
         if (x.iv.months && x.r.daysLeft !== null) parts.push(x.r.daysLeft > 0 ? 'باقي ' + fmtN(x.r.daysLeft) + ' يوم' : 'متأخر ' + fmtN(-x.r.daysLeft) + ' يوم');
         const cls = x.r.status === 'overdue' ? 'red' : x.r.status === 'due' ? 'red' : 'orange';
         const word = x.r.status === 'overdue' ? 'متأخرة' : 'مستحقة قريبًا';
-        return '<div class="kv"><span class="k">' + esc(CATS[x.ck]) + ' <span class="t2">(' + parts.join(' أو ') + ')</span></span>' +
+        return '<div class="kv"><span class="k">' + esc(catLabel(x.ck)) + ' <span class="t2">(' + parts.join(' أو ') + ')</span></span>' +
           '<span class="badge ' + cls + '">' + word + '</span></div>';
       }).join('') + '</div>';
   }
@@ -276,7 +276,7 @@ async function renderMaintTab(body) {
   }).filter(Boolean);
   if (lastW.length) {
     html += '<div class="card"><div class="card-title">📍 آخر مكان صيانة لكل نوع</div>' +
-      lastW.map(x => '<div class="kv"><span class="k">' + esc(CATS[x.ck]) + '</span>' +
+      lastW.map(x => '<div class="kv"><span class="k">' + esc(catLabel(x.ck)) + '</span>' +
         '<span class="v" style="text-align:left">' + esc(x.last.workshopName || '—') +
         ' <span class="t2">' + dayLabel(x.last.date) + ' • ' + money(x.last.cost) + '</span></span></div>').join('') +
       '</div>';
@@ -286,7 +286,7 @@ async function renderMaintTab(body) {
   html += '<div class="card tight"><div class="grid2">' +
     field('بحث', txtInput('q', AR.maintQ, 'اسم ورشة، قطعة، عطل…').replace('data-f', 'data-mq')) +
     field('النوع', '<select class="input" data-mc=""><option value="">الكل</option>' +
-      options(CAT_LIST.map(k => ({ v: k, l: CATS[k] })), AR.maintCat).replace('value=""', 'value="" ') + '</select>') +
+      options(allCatKeys().map(k => ({ v: k, l: catLabel(k) })), AR.maintCat).replace('value=""', 'value="" ') + '</select>') +
     '</div></div>';
 
   /* entries */
@@ -305,7 +305,7 @@ async function renderMaintTab(body) {
   html += list.map(m =>
     '<div class="row-item" style="align-items:flex-start">' +
     (m.receiptPhoto ? '<img class="photo-thumb" src="' + m.receiptPhoto + '" data-photo>' : '<div class="avatar-dot">🔧</div>') +
-    '<div class="grow"><div class="t1">' + esc(CATS[m.category] || m.category) +
+    '<div class="grow"><div class="t1">' + esc(maintName(m)) +
     ' <span class="badge gray">' + esc(fullDayLabel(m.date)) + '</span></div>' +
     '<div class="t2">عداد ' + fmtN(m.odo) + (m.workshopName ? ' • 📍 ' + esc(m.workshopName) : '') +
     (m.partBrand ? ' • قطعة: ' + esc(m.partBrand) : '') + '</div>' +
@@ -342,7 +342,7 @@ async function renderMaintTab(body) {
     card.querySelector('[data-act="view-rec"]').onclick = () => showRecHistory('maintenance', id);
     card.querySelector('[data-act="edit-maint"]').onclick = () => openMaintForm(rec);
     card.querySelector('[data-act="del-maint"]').onclick = () => {
-      confirmDelete('maintenance', rec, 'صيانة ' + CATS[rec.category] + ' بمبلغ ' + fmtN(rec.cost) + ' ج.م — ' + fullDayLabel(rec.date));
+      confirmDelete('maintenance', rec, 'صيانة ' + maintName(rec) + ' بمبلغ ' + fmtN(rec.cost) + ' ج.م — ' + fullDayLabel(rec.date));
     };
   });
 }
@@ -354,7 +354,7 @@ function showMaintExportMenu(maints) {
     '<button class="btn" id="me-pdf">PDF (طباعة)</button></div>' +
     '<div class="modal-actions"><button class="btn" onclick="closeModal()">إلغاء</button></div>',
     { onMount: w => {
-      const rows = () => maints.map(m => [m.date, maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح', CATS[m.category] || m.category, m.odo, m.cost,
+      const rows = () => maints.map(m => [m.date, maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح', maintName(m), m.odo, m.cost,
         m.workshopName || '', m.workshopAddr || '', m.partBrand || '',
         m.faultDesc || '', m.repairDesc || '', m.prevCost !== undefined ? m.prevCost : '', m.nextDueKm || '', m.nextDueDate || '',
         isDaily() ? '—' : (m.fromWallet ? 'من الخزنة' : 'خارجية'), m.notes || '']);
@@ -372,7 +372,7 @@ function showMaintExportMenu(maints) {
         const b = '<h1>سجل صيانة و تاريخ ' + esc(S.vehicleName) + '</h1>' +
           '<div class="meta">عداد حالي: ' + fmtN(S.odo) + ' • ' + esc(S.plate || '') + '</div>' +
           '<table><tr><th>التاريخ</th><th>التصنيف</th><th>النوع</th><th>عداد</th><th>تكلفة</th><th>السعر القديم</th><th>الورشة</th><th>العطل</th><th>الإصلاح</th></tr>' +
-          maints.map(m => '<tr><td>' + m.date + '</td><td>' + (maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح') + '</td><td>' + esc(CATS[m.category] || '') + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + (m.prevCost !== undefined ? fmtN(m.prevCost) : '') + '</td><td>' + esc(m.workshopName || '') + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') +
+          maints.map(m => '<tr><td>' + m.date + '</td><td>' + (maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح') + '</td><td>' + esc(maintName(m)) + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + (m.prevCost !== undefined ? fmtN(m.prevCost) : '') + '</td><td>' + esc(m.workshopName || '') + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') +
           '</table>';
         printHTML('سجل الصيانة', b);
       };
@@ -386,7 +386,7 @@ function openMaintForm(existing, prefill) {
   const d = Object.assign({
     date: todayStr(), odo: +S.odo || '', category: 'oil', cost: '',
     workshopName: '', workshopAddr: '', partBrand: '',
-    nextDueKm: '', nextDueDate: '', kind: 'routine',
+    nextDueKm: '', nextDueDate: '', kind: '', customName: '',
     faultDesc: '', repairDesc: '', fromWallet: true, notes: '', receiptPhoto: ''
   }, base);
   if (!isEdit && !prefill) {
@@ -401,8 +401,11 @@ function openMaintForm(existing, prefill) {
     return field('التاريخ', dateInput('date', d.date)) +
       '<div class="grid2">' +
       field('عداد المسافة', numInput('odo', d.odo, '')) +
-      field('نوع الصيانة', '<select class="input" data-f="category">' + options(CAT_LIST.map(k => ({ v: k, l: CATS[k] })), d.category) + '</select>') +
+      field('نوع الصيانة', '<select class="input" data-f="category">' + options(allCatKeys().map(k => ({ v: k, l: catLabel(k) })), d.category) + '</select>') +
       '</div>' +
+      (d.category === 'other'
+        ? field('اسم الصيانة (بدل «أخرى» — عشان تعرفها بعدين)', txtInput('customName', d.customName, 'مثلاً: تغيير سير مروحة'))
+        : '') +
       field('التكلفة (ج.م)', numInput('cost', d.cost, '0', true)) +
       '<div class="grid2">' +
       field('الورشة / المكان', txtInput('workshopName', d.workshopName, 'الاسم')) +
@@ -481,6 +484,7 @@ function openMaintForm(existing, prefill) {
         rec.repairDesc = cur.repairDesc || '';
         rec.fromWallet = !isDaily() && !!cur.fromWallet;
         rec.kind = maintKind({ category: rec.category, kind: cur.kind });
+        rec.customName = cur.category === 'other' ? (cur.customName || '') : '';
         rec.notes = cur.notes || '';
         rec.receiptPhoto = cur.receiptPhoto || '';
         rec.updatedAt = Date.now();
@@ -501,7 +505,7 @@ function openRepeatLast() {
     if (!used.length) { toast('لا توجد سجلات صيانة سابقة للتكرار'); return; }
     openModal('<div class="modal-title">🔁 تكرار آخر صيانة</div>' +
       '<div class="t2" style="margin-bottom:10px">اختر النوع لنسخ بيانات آخر مرة (الورشة، القطعة، الأعطال) وتعديل التاريخ والعداد والتكلفة فقط.</div>' +
-      field('النوع', '<select class="input" id="rp-cat">' + options(used.map(k => ({ v: k, l: CATS[k] })), used[0]) + '</select>') +
+      field('النوع', '<select class="input" id="rp-cat">' + options(used.map(k => ({ v: k, l: catLabel(k) })), used[0]) + '</select>') +
       '<div class="modal-actions"><button class="btn" onclick="closeModal()">إلغاء</button>' +
       '<button class="btn btn-pri" id="rp-go">متابعة</button></div>',
       { onMount: w => {
@@ -525,7 +529,7 @@ async function renderHealthTab(body) {
   const maints = (await DB.all('maintenance')).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt - a.createdAt));
   let html = '<div class="card tight"><div class="grid2">' +
     field('بحث في الأعطال والإصلاحات', '<input class="input" data-hq value="' + esc(AR.healthQ) + '" placeholder="كلمة من العطل أو القطعة…">') +
-    field('النوع', '<select class="input" data-hc><option value="">الكل</option>' + options(CAT_LIST.map(k => ({ v: k, l: CATS[k] })), AR.healthCat) + '</select>') +
+    field('النوع', '<select class="input" data-hc><option value="">الكل</option>' + options(allCatKeys().map(k => ({ v: k, l: catLabel(k) })), AR.healthCat) + '</select>') +
     '</div>' +
     '<div class="btn-row"><button class="btn btn-sm" id="hh-pdf">📄 PDF</button><button class="btn btn-sm" id="hh-csv">📥 CSV</button></div>' +
     '</div>';
@@ -543,7 +547,7 @@ async function renderHealthTab(body) {
   html += '<div class="card"><div class="card-title">🩺 خط زمني للعربية — العطل ثم الإصلاح (' + fmtN(list.length) + ')</div>' +
     (list.length ? '<div class="tl">' + list.map(m =>
       '<div class="tl-item ' + (m.faultDesc ? 'bad' : '') + '">' +
-      '<div style="font-weight:800;font-size:.9rem">' + esc(CATS[m.category] || m.category) + ' — ' + esc(fullDayLabel(m.date)) + '</div>' +
+      '<div style="font-weight:800;font-size:.9rem">' + esc(maintName(m)) + ' — ' + esc(fullDayLabel(m.date)) + '</div>' +
       '<div class="t2">عداد ' + fmtN(m.odo) + ' • تكلفة ' + money(m.cost) + (m.workshopName ? ' • ' + esc(m.workshopName) : '') + '</div>' +
       (m.faultDesc ? '<div class="t2" style="margin-top:3px"><b>العطل:</b> ' + esc(m.faultDesc) + '</div>' : '') +
       (m.repairDesc ? '<div class="t2"><b>الإصلاح:</b> ' + esc(m.repairDesc) + '</div>' : '') +
@@ -558,11 +562,11 @@ async function renderHealthTab(body) {
     if (!requirePro('تصدير PDF')) return;
     const b = '<h1>التاريخ الصحي لـ ' + esc(S.vehicleName) + '</h1><div class="meta">' + esc(S.plate || '') + '</div>' +
       '<table><tr><th>التاريخ</th><th>التصنيف</th><th>النوع</th><th>عداد</th><th>تكلفة</th><th>وصف العطل</th><th>ما تم إصلاحه</th></tr>' +
-      maints.map(m => '<tr><td>' + m.date + '</td><td>' + (maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح') + '</td><td>' + esc(CATS[m.category] || '') + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') + '</table>';
+      maints.map(m => '<tr><td>' + m.date + '</td><td>' + (maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح') + '</td><td>' + esc(maintName(m)) + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') + '</table>';
     printHTML('تاريخ العربية الصحي', b);
   };
   body.querySelector('#hh-csv').onclick = () => {
-    const rows = maints.map(m => [m.date, maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح', CATS[m.category] || m.category, m.odo, m.cost, m.faultDesc || '', m.repairDesc || '', m.workshopName || '']);
+    const rows = maints.map(m => [m.date, maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح', maintName(m), m.odo, m.cost, m.faultDesc || '', m.repairDesc || '', m.workshopName || '']);
     download('تاريخ-العربية.csv', toCSV([['التاريخ', 'التصنيف', 'النوع', 'العداد', 'التكلفة', 'وصف العطل', 'الإصلاح', 'الورشة'], ...rows]), 'text/csv;charset=utf-8');
   };
 }

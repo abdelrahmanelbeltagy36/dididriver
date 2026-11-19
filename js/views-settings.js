@@ -30,7 +30,7 @@ Views.settings = async function (root) {
     : Notification.permission === 'granted' ? 'مفعّلة ✓'
     : Notification.permission === 'denied' ? 'مقفولة من إعدادات المتصفح' : 'لم تُطلب بعد';
   html += '<div class="card"><div class="card-title">🔔 إشعارات الصيانة</div>' +
-    '<div class="t2" style="line-height:1.8">إشعار <b>مرة كل 3 أيام</b> لكل حاجة قربت أو فاتت — وكل حاجة ليها إشعار لوحدها. ولو مفيش حاجة، مفيش إشعار خالص. وترقد تعدّل العداد من زرار جوه الإشعار.</div>' +
+    '<div class="t2" style="line-height:1.8">إشعار <b>كل يوم الساعة 4 العصر</b> لتسجيل الكيلومتر — الوقت اللي غالبًا تكون فيه في العربية. ولو حاجة قربت أو فاتت، كل حاجة ليها إشعار لوحدها. ولو طنشت يوم، الإشعار يرجع لك في اليوم اللي بعده. وترقد تعدّل العداد من زرار جوه الإشعار.</div>' +
     '<div class="kv" style="margin-top:8px"><span class="k">الحالة</span><span class="v">' + notifState + '</span></div>' +
     '<button class="btn btn-pri btn-block" id="st-notif">' +
     (('Notification' in window) && Notification.permission === 'granted'
@@ -104,14 +104,16 @@ Views.settings = async function (root) {
     ' كل ما تسجّل عملية صيانة (تغيير زيت مثلًا) في سجل الصيانة واكتب رقم العداد وقتها،' +
     ' يبدأ العد من جديد ويقولك <b>باقي كام كم</b> على التغيير الجديد — تلقائيًا بضاعة.</div>' +
     '<div class="t2" style="margin-bottom:10px">اكتب 0 في أي خانة = تذكير مقفول للنوع ده. اللي يحصل الأول (الكم أو الشهور) هو اللي يطلع التذكير.</div>' +
-    CAT_LIST.map(ck => {
-      const iv = S.intervals[ck];
+    allCatKeys().map(ck => {
+      const iv = intervalOf(ck) || {};
+      const isCustom = !!(S.customCats && S.customCats[ck]);
       const oilChips = (ck === 'oil' || ck === 'oilFilter')
         ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">' +
           OIL_PRESETS.map(p => '<button class="btn btn-sm' + (iv.km === p.km ? ' btn-pri' : '') + '" data-oilchip="' + ck + '" data-km="' + p.km + '" style="min-height:36px;padding:4px 10px"><bdi dir="ltr">' + p.label + '</bdi></button>').join('') +
           '</div>' : '';
       return '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">' +
-        '<div class="t1" style="font-weight:800;margin-bottom:4px">' + esc(CATS[ck]) + '</div>' +
+        '<div class="t1" style="font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:6px">' + esc(catLabel(ck)) +
+        (isCustom ? '<button class="btn btn-sm btn-danger" data-delcat="' + ck + '" style="min-height:24px;padding:2px 8px">🗑️</button>' : '') + '</div>' +
         oilChips +
         '<div class="grid2">' +
         '<div class="field" style="margin:0"><label style="color:var(--pri);font-weight:700">📏 كل كام كم</label>' +
@@ -122,13 +124,13 @@ Views.settings = async function (root) {
     }).join('') +
     '<div class="divider"></div>' +
     '<div class="t2" style="font-weight:800;margin-bottom:6px">📍 حالة عربيتك دلوقتي (حسب عدادك الحالي: <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi> كم)</div>' +
-    CAT_LIST.filter(ck => { const iv = S.intervals[ck]; return iv && (iv.km || iv.months); }).map(ck => {
-      const iv = S.intervals[ck];
+    allCatKeys().filter(ck => { const iv = intervalOf(ck); return iv && (iv.km || iv.months); }).map(ck => {
+      const iv = intervalOf(ck);
       const last = latestMaint(ivMaints, ck);
       const r = maintDueInfo(ck, last, iv, ivOdo, ivToday);
       let line;
       if (!last) {
-        line = '<span class="badge gray">لسه مفيش تسجيل</span> أول ما تغيّر <b>' + esc(CATS[ck]) + '</b> سجّلها في سجل الصيانة وهبدأ أعدّ لك من ساعتها';
+        line = '<span class="badge gray">لسه مفيش تسجيل</span> أول ما تغيّر <b>' + esc(catLabel(ck)) + '</b> سجّلها في سجل الصيانة وهبدأ أعدّ لك من ساعتها';
       } else {
         const parts = [];
         if (r.nextDueKm !== null) parts.push('التغيير الجاي عند <bdi dir="ltr">' + fmtN(r.nextDueKm) + '</bdi> كم');
@@ -142,7 +144,7 @@ Views.settings = async function (root) {
         if (r.level === 'missed') line += '<div class="t2" style="color:var(--neg);font-weight:700">استحقاقها كان ' + (r.nextDueKm ? 'عند <bdi dir="ltr">' + fmtN(r.nextDueKm) + '</bdi> كم' : '') + ' وانت عند <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi></div>';
         line += '<div class="t2">آخر مرة: ' + esc(last.date) + (last.odo ? ' عند عداد <bdi dir="ltr">' + fmtN(last.odo) + '</bdi> كم' : '') + '</div>';
       }
-      return '<div class="kv" style="align-items:start"><span class="k" style="white-space:nowrap">' + esc(CATS[ck]) + '</span>' +
+      return '<div class="kv" style="align-items:start"><span class="k" style="white-space:nowrap">' + esc(catLabel(ck)) + '</span>' +
         '<span class="v" style="text-align:right;font-weight:500">' + line + '</span></div>';
     }).join('') +
     '<button class="btn btn-pri btn-block" id="st-iv-save" style="margin-top:10px">💾 حفظ الفترات</button></div>';
@@ -355,11 +357,27 @@ function bindSettings(root) {
 
   root.querySelector('#st-iv-save').onclick = async () => {
     root.querySelectorAll('[data-iv]').forEach(el => {
-      S.intervals[el.dataset.iv][el.dataset.k] = +el.value || 0;
+      const ck = el.dataset.iv, val = +el.value || 0;
+      if (S.customCats && S.customCats[ck]) S.customCats[ck][el.dataset.k] = val;
+      else S.intervals[ck][el.dataset.k] = val;
     });
     await saveSettings();
     toast('✅ تم حفظ فترات الصيانة');
   };
+
+  root.querySelectorAll('[data-delcat]').forEach(b => b.onclick = async () => {
+    const ck = b.dataset.delcat;
+    const ok = await confirmDlg({
+      title: 'حذف الفئة المخصصة؟',
+      body: 'هتختفي من جدول الصيانة والتنبيهات — وسجلاتها القديمة هتفتضل في الأرشيف.',
+      okText: 'حذف', danger: true
+    });
+    if (!ok) return;
+    delete S.customCats[ck];
+    await saveSettings();
+    toast('🗑️ تم حذف الفئة');
+    go('settings');
+  });
 
   root.querySelector('#st-theme').addEventListener('change', async e => {
     S.theme = e.target.value;
