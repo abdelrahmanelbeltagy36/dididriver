@@ -49,7 +49,8 @@ Views.settings = async function (root) {
       (localStorage.getItem('didicloud_fcm_token') ? 'متصلة ✓' : 'مش متصلة — افتح التطبيق الأصلي') + '</span></div>' +
       '<div class="t2" style="font-size:.72rem;color:var(--sub);word-break:break-all">تشخيص: Capacitor=' +
       (typeof window.Capacitor) + ' • native=' + (!!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) +
-      ' • plugin=' + (typeof window.CapacitorPushNotifications) + ' • bridge=' + (typeof capacitorExports) + '</div>' +
+      ' • plugin=' + (typeof window.CapacitorPushNotifications) + ' • bridge=' + (typeof capacitorExports) +
+      ' • host=' + location.hostname + ' • native=' + (!!window.__NATIVE_WEBVIEW__) + '</div>' +
       '<button class="btn btn-block" id="st-fcm-retry" style="margin-top:6px">🔄 إعادة محاولة تفعيل الإشعارات</button>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
   }

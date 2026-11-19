@@ -167,8 +167,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   /* 📱 FCM: إشعارات حقيقية حتى والتطبيق مقفول (نسخة أندرويد بس) */
   if (typeof initNativePush === 'function') initNativePush();
 
-  /* service worker for offline + installability */
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  /* الـ WebView الأصلي بيحقن capacitor.js بنفسه — الـ Service Worker بيخلي الكاش يتقدمه
+     فبنوقفه في الأندرويد عشان الـ bridge والـ FCM يشتغلوا */
+  const NATIVE_WEBVIEW = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  window.__NATIVE_WEBVIEW__ = NATIVE_WEBVIEW;
+  if (NATIVE_WEBVIEW) {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => {});
+    }
+  } else if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     try { navigator.serviceWorker.register('sw.js'); } catch (e) { /* ignore */ }
   }
 });
