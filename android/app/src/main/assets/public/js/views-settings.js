@@ -47,6 +47,10 @@ Views.settings = async function (root) {
       '<div class="kv"><span class="k">حالة البيانات</span><span class="v">بتتزامن تلقائيًا مع السحابة لما النت يرجع</span></div>' +
       '<div class="kv"><span class="k">إشعارات أندرويد (FCM)</span><span class="v">' +
       (localStorage.getItem('didicloud_fcm_token') ? 'متصلة ✓' : 'مش متصلة — افتح التطبيق الأصلي') + '</span></div>' +
+      '<div class="t2" style="font-size:.72rem;color:var(--sub);word-break:break-all">تشخيص: Capacitor=' +
+      (typeof window.Capacitor) + ' • native=' + (!!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) +
+      ' • plugin=' + (typeof window.CapacitorPushNotifications) + ' • bridge=' + (typeof capacitorExports) + '</div>' +
+      '<button class="btn btn-block" id="st-fcm-retry" style="margin-top:6px">🔄 إعادة محاولة تفعيل الإشعارات</button>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
   }
 
@@ -262,6 +266,14 @@ function bindSettings(root) {
       if (++taps >= 7) { taps = 0; ST.admin = !ST.admin; go('settings'); }
     });
   }
+
+  const fcmRetry = root.querySelector('#st-fcm-retry');
+  if (fcmRetry) fcmRetry.onclick = async () => {
+    if (typeof window.retryNativePush !== 'function') { toast('الزرار ده شغال في نسخة الأندرويد بس'); return; }
+    const ok = await window.retryNativePush();
+    toast(ok ? '✅ تم تفعيل الإشعارات — راجع الإعدادات' : 'لسه ما حصلش تسجيل — تأكد إن إذن الإشعارات مسموح للتطبيق من إعدادات الموبايل');
+    go('settings');
+  };
 
   const notifTestBtn = root.querySelector('#st-notif-test');
   if (notifTestBtn) notifTestBtn.onclick = () => sendTestNotification();

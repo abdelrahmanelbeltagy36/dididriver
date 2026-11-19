@@ -71,4 +71,10 @@
   }
 
   window.initNativePush = initNativePush;
+  window.retryNativePush = async function () {
+    started = false;
+    await initNativePush();
+    if (typeof window.trySaveFcmToken === 'function') await window.trySaveFcmToken();
+    return !!(localStorage.getItem('didicloud_fcm_token'));
+  };
 })();
