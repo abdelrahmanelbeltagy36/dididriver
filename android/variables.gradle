@@ -27,3 +27,5 @@ ext {
 // trigger build java21
 
 // trigger build assets
+
+// trigger build push plugin
