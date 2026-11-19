@@ -124,7 +124,7 @@ Views.settings = async function (root) {
     '<div class="t2" style="font-weight:800;margin-bottom:6px">📍 حالة عربيتك دلوقتي (حسب عدادك الحالي: <bdi dir="ltr">' + fmtN(ivOdo) + '</bdi> كم)</div>' +
     CAT_LIST.filter(ck => { const iv = S.intervals[ck]; return iv && (iv.km || iv.months); }).map(ck => {
       const iv = S.intervals[ck];
-      const last = ivMaints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0];
+      const last = latestMaint(ivMaints, ck);
       const r = maintDueInfo(ck, last, iv, ivOdo, ivToday);
       let line;
       if (!last) {

@@ -294,6 +294,18 @@ function reminderFor(catKey, lastEntry, interval, currentOdo, today) {
   return { status, kmSince, daysSince, kmLeft, daysLeft };
 }
 
+/* أحدث تسجيل لنوع صيانة — بنرتب بالتحديث/الإنشاء مش بالتاريخ،
+   عشان لو سجّل تغيير اليوم لتاريخ قديم يفضل هو الأحدث ويشيل التنبيه الأحمر */
+function latestMaint(maints, ck) {
+  return (maints || [])
+    .filter(m => m && m.category === ck && !m.deleted)
+    .sort((a, b) =>
+      (+b.updatedAt || +b.createdAt || 0) - (+a.updatedAt || +a.createdAt || 0) ||
+      (b.date || '').localeCompare(a.date || '') ||
+      (+b.odo || 0) - (+a.odo || 0)
+    )[0] || null;
+}
+
 /* ---------- maintenance due info (shared: wallets / settings / home / weekly nudge) ----------
    level: 'missed' = عدادك عدّى الموعد (أحمر) • 'soon' = فاضل ≤500 كم أو ≤7 أيام (أخضر) • 'ok' */
 function maintDueInfo(ck, lastEntry, interval, currentOdo, today) {

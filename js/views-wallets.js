@@ -103,7 +103,7 @@ Views.wallets = async function (root) {
   /* ---------- 🔧 maintenance schedule — quick "تم التغيير" per item ---------- */
   const odoNow = currentOdo(sessions, maints);
   const today = todayStr();
-  const dueCats = CAT_LIST.map(ck => ({ ck, info: maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odoNow, today) }))
+  const dueCats = CAT_LIST.map(ck => ({ ck, info: maintDueInfo(ck, latestMaint(maints, ck), S.intervals[ck], odoNow, today) }))
     .filter(x => x.info);
   const order = { missed: 0, soon: 1, ok: 2 };
   dueCats.sort((a, b) => order[a.info.level] - order[b.info.level]);
@@ -165,7 +165,8 @@ Views.wallets = async function (root) {
 };
 
 /* ---------- quick "تم التغيير" form — التاريخ + العداد + التكلفة وخلاص ---------- */
-function quickMaintDone(catKey) {
+function quickMaintDone(catKey, opts) {
+  opts = opts || {};
   const iv = S.intervals[catKey] || {};
   const odoDef = +S.odo || '';
   const nextLine = odo => {
@@ -202,22 +203,33 @@ function quickMaintDone(catKey) {
         const odo = +w.querySelector('[data-f="odo"]').value || 0;
         const cost = +w.querySelector('[data-f="cost"]').value || 0;
         if (!(odo > 0)) { toast('اكتب رقم العداد وقت التغيير'); return; }
-        const rec = {
-          id: uid(), createdAt: Date.now(), history: [{ ts: Date.now(), action: 'create' }],
+        /* 👉 overwrite: استبدل أحدث تسجيل لنفس النوع — ما يفضلش تسجيل قديم يطلع أحمر */
+        const allMaints = await DB.all('maintenance');
+        const prev = latestMaint(allMaints, catKey);
+        const base = {
           date, odo, category: catKey, cost,
           workshopName: '', workshopAddr: '', partBrand: '',
           nextDueKm: iv.km ? odo + iv.km : null,
           nextDueDate: iv.months ? addDays(date, iv.months * 30) : null,
           faultDesc: '', repairDesc: '',
           fromWallet: cost > 0 && w.querySelector('[data-f="fromWallet"]').checked,
-          notes: 'تسجيل سريع (تم التغيير)', receiptPhoto: ''
+          notes: 'تسجيل سريع (تم التغيير)', receiptPhoto: '',
+          updatedAt: Date.now()
         };
+        const rec = prev
+          ? Object.assign({}, prev, base, {
+              id: prev.id,
+              createdAt: prev.createdAt || Date.now(),
+              history: (prev.history || []).concat([{ ts: Date.now(), action: 'تغيير مسجّل (استبدال)' }])
+            })
+          : Object.assign({ id: uid(), createdAt: Date.now(), history: [{ ts: Date.now(), action: 'create' }] }, base);
         await DB.put('maintenance', rec);
         if (odo > (+S.odo || 0)) { S.odo = odo; await saveSettings(); }
         closeModal();
         const nx = rec.nextDueKm ? ' — 📏 التغيير الجاي عند <bdi dir="ltr">' + fmtN(rec.nextDueKm) + '</bdi> كم' : '';
-        toast('✅ تم تسجيل التغيير' + nx, { duration: 7000 });
-        go('wallets');
+        toast('✅ تم تسجيل التغيير — اتحدّث التسجيل القديم' + nx, { duration: 7000 });
+        go(opts.backTo || 'wallets');
+        await notifyDueItems(); /* صفّر حالة التنبيه للنوع ده */
       };
     } }
   );

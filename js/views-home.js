@@ -62,7 +62,7 @@ Views.home = async function (root) {
   const odoNow = currentOdo(sessions, maints);
   const odoMissed = [], odoSoon = [];
   for (const ck of CAT_LIST) {
-    const info = maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odoNow, today);
+    const info = maintDueInfo(ck, latestMaint(maints, ck), S.intervals[ck], odoNow, today);
     if (!info) continue;
     if (info.level === 'missed') odoMissed.push(CATS[ck]);
     else if (info.level === 'soon') odoSoon.push(CATS[ck]);
@@ -76,8 +76,20 @@ Views.home = async function (root) {
     '<button class="btn btn-pri" id="hm-odo-save" style="min-height:44px">تحديث ✓</button></div>' +
     (odoMissed.length ? '<div class="t2" style="margin-top:8px;color:var(--neg);font-weight:700">🔴 فاتك تغيير: ' + odoMissed.map(n => esc(n)).join('، ') + ' — من خزنة العربية سجّلها</div>' : '') +
     (odoSoon.length ? '<div class="t2" style="margin-top:6px;color:var(--pos);font-weight:700">🟢 قربت: ' + odoSoon.map(n => esc(n)).join('، ') + ' — فاضل 500 كم أو أقل</div>' : '') +
-    (odoNow ? '<div class="t2" style="margin-top:6px">بعد ما تحدث الرقم، كل المواعيد بتُحسب عليه فورًا — والتفاصيل في خزنة العربية.</div>' : '') +
+    (odoNow ? '<div class="t2" style="margin-top:6px">بعد ما تحدث الرقم، كل المواعيد بتُحسب عليه فورًا.</div>' : '') +
     '</div>';
+
+  /* ---------- 🔧 مدخل واضح لجدول الصيانة ---------- */
+  html += '<div class="card tight"><div class="row-item">' +
+    '<div class="avatar-dot">🔧</div>' +
+    '<div class="grow"><div class="t1">جدول الصيانة</div>' +
+    '<div class="t2">' +
+    (odoMissed.length ? '🔴 فاتك ' + odoMissed.length + ' • ' : '') +
+    (odoSoon.length ? '🟢 قربت ' + odoSoon.length + ' • ' : '') +
+    ' تعديل، تم التغيير، وكل المواعيد في مكان واحد' +
+    '</div></div>' +
+    '<button class="btn btn-sm btn-pri" onclick="go(\'maint\')">افتح ←</button>' +
+    '</div></div>';
 
   /* ---------- latest working day hero ---------- */
   if (latest) {
@@ -154,7 +166,7 @@ Views.home = async function (root) {
   const odo = currentOdo(sessions, maints);
   const missedNames = [], soonNames = [];
   for (const ck of CAT_LIST) {
-    const info = maintDueInfo(ck, maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0], S.intervals[ck], odo, today);
+    const info = maintDueInfo(ck, latestMaint(maints, ck), S.intervals[ck], odo, today);
     if (!info) continue;
     if (info.level === 'missed') missedNames.push(CATS[ck]);
     else if (info.level === 'soon') soonNames.push(CATS[ck]);

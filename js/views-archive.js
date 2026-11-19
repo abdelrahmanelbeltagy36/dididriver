@@ -244,7 +244,7 @@ async function renderMaintTab(body) {
   const reminders = CAT_LIST.map(ck => {
     const iv = S.intervals[ck];
     if (!iv || (!iv.km && !iv.months)) return null;
-    const last = maints.filter(m => m.category === ck)[0];
+    const last = latestMaint(maints, ck);
     return { ck, iv, last, r: reminderFor(ck, last, iv, odo, today) };
   }).filter(Boolean);
   const active = reminders.filter(x => x.r.status === 'due' || x.r.status === 'overdue' || x.r.status === 'soon');
@@ -271,7 +271,7 @@ async function renderMaintTab(body) {
 
   /* last workshop per category */
   const lastW = CAT_LIST.map(ck => {
-    const last = maints.filter(m => m.category === ck)[0];
+    const last = latestMaint(maints, ck);
     return last ? { ck, last } : null;
   }).filter(Boolean);
   if (lastW.length) {
@@ -506,7 +506,7 @@ function openRepeatLast() {
       { onMount: w => {
         w.querySelector('#rp-go').onclick = () => {
           const ck = w.querySelector('#rp-cat').value;
-          const last = maints.filter(m => m.category === ck).sort((a, b) => b.date.localeCompare(a.date))[0];
+          const last = latestMaint(maints, ck);
           closeModal();
           openMaintForm(null, {
             category: last.category,

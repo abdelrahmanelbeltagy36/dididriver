@@ -8,7 +8,8 @@ const TITLES = {
   add: 'إضافة يوم',
   wallets: 'خزنة العربية',
   analytics: 'التحليلات',
-  archive: 'الأرشيف والصيانة',
+  archive: 'الأرشيف',
+  maint: 'جدول الصيانة',
   settings: 'الإعدادات',
   feedback: 'اقتراحات ومشاكل',
   onboard: 'أهلاً بك — نظّم عربيتك',
@@ -20,7 +21,8 @@ const DAILY_TITLES = {
   add: 'تسجيل يوم',
   wallets: 'مصاريف العربية',
   analytics: 'تحليل المصاريف',
-  archive: 'الأرشيف والصيانة',
+  archive: 'الأرشيف',
+  maint: 'جدول الصيانة',
   settings: 'الإعدادات',
   feedback: 'اقتراحات ومشاكل',
   onboard: 'أهلاً بك — نظّم عربيتك',
@@ -168,7 +170,7 @@ async function dueItems() {
   const today = todayStr();
   const all = [];
   for (const ck of CAT_LIST) {
-    const last = maints.filter(m => m.category === ck).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    const last = latestMaint(maints, ck);
     const info = maintDueInfo(ck, last, S.intervals[ck], odo, today);
     all.push({ ck, info });
   }
