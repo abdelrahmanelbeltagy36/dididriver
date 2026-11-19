@@ -45,6 +45,8 @@ Views.settings = async function (root) {
     html += '<div class="card"><div class="card-title">☁️ الحساب والمزامنة</div>' +
       '<div class="kv"><span class="k">البريد</span><span class="v" dir="ltr">' + esc(cu.email || '—') + '</span></div>' +
       '<div class="kv"><span class="k">حالة البيانات</span><span class="v">بتتزامن تلقائيًا مع السحابة لما النت يرجع</span></div>' +
+      '<div class="kv"><span class="k">إشعارات أندرويد (FCM)</span><span class="v">' +
+      (localStorage.getItem('didicloud_fcm_token') ? 'متصلة ✓' : 'مش متصلة — افتح التطبيق الأصلي') + '</span></div>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
   }
 

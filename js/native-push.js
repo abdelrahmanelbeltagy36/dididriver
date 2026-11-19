@@ -24,12 +24,23 @@
       }
     } catch (e) { /* أكمل محاولة التسجيل */ }
 
+    async function trySaveToken() {
+      const token = localStorage.getItem('didicloud_fcm_token') || '';
+      if (!token) return false;
+      if (window.Cloud && typeof Cloud.enabled === 'function' && Cloud.enabled() &&
+          typeof Cloud.signedIn === 'function' && Cloud.signedIn()) {
+        try { await Cloud.saveFcmToken(token); return true; }
+        catch (e) { console.warn('save FCM token failed', e); }
+      }
+      return false;
+    }
+    window.trySaveFcmToken = trySaveToken;
+
     try {
       plugin.addListener('registration', async (info) => {
         if (!info || !info.token) return;
-        if (window.Cloud && typeof Cloud.enabled === 'function' && Cloud.enabled()) {
-          try { await Cloud.saveFcmToken(info.token); } catch (e) { console.warn('save FCM token failed', e); }
-        }
+        localStorage.setItem('didicloud_fcm_token', info.token);
+        await trySaveToken();
       });
 
       plugin.addListener('registrationError', (err) => {

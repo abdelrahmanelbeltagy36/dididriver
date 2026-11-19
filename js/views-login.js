@@ -51,6 +51,9 @@ Views.login = async function (root) {
         return;
       }
       toast('✅ أهلاً بك — بياناتك هتتزامن دلوقتي');
+      if (typeof window.trySaveFcmToken === 'function') {
+        try { await window.trySaveFcmToken(); } catch (e) {}
+      }
       location.reload();
     } catch (e) {
       const text = (e && e.message) || 'حصل خطأ';
