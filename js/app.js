@@ -151,8 +151,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     } else {
       if (!obDone) await kvSet('onboarded', true); /* أجهزة موجودة قبل التحديث */
       go('home');
-      /* ⏰ إشعار تسجيل العداد كل يوم الساعة 4 العصر */
-      setTimeout(() => { dailyNudge().catch(() => {}); }, 1500);
+      /* ⏰ تذكير العداد 10 الصبح + 4 العصر — وفور ما ترجع للتطبيق */
+      setTimeout(() => { dailyNudge().catch(() => {}); }, 800);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) dailyNudge().catch(() => {});
+      });
+      window.addEventListener('focus', () => { dailyNudge().catch(() => {}); });
     }
     if (quickOdo) setTimeout(() => {
       try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -199,7 +203,14 @@ async function showMaintNotification(title, body, tag) {
     });
     return true;
   } catch (e) {
-    console.warn('showNotification failed:', e && e.message);
+    console.warn('SW showNotification failed, trying direct:', e && e.message);
+    /* fallback: متصفحات مش بتدعم إشعارات الـ service worker */
+    try {
+      if (Notification.permission === 'granted') {
+        new Notification(title, { body: body, tag: tag, icon: 'icons/icon-512.png' });
+        return true;
+      }
+    } catch (e2) {}
     return false;
   }
 }
@@ -241,51 +252,73 @@ async function notifyDueItems(opts) {
   return sent;
 }
 
-/* =================⏰ إشعار تسجيل العداد — كل يوم الساعة 4 العصر ================= */
-let odoReminderTimer = null;
+/* =================⏰ تذكير العداد — الساعة 10 والساعة 4 كل يوم ================= */
+const ODO_SLOTS = [
+  { h: 10, key: 'lastOdoNudge10', tagPart: '10', label: 'الصبح',
+    body: 'الساعة 10 الصبح — لو مشيت شوية اكتب عدادك دلوقتي. اضغط «تحديث العداد».' },
+  { h: 16, key: 'lastOdoNudge16', tagPart: '16', label: 'العصر',
+    body: 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك. اضغط «تحديث العداد».' }
+];
+const odoTimers = {};
 
-async function sendDailyOdoReminder() {
-  if (S.notifications === false) return false;
-  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
-  const body = 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك. اضغط «تحديث العداد» واكتب الرقم في ثانية.';
-  return await showMaintNotification('📍 وقت تسجيل الكيلومتر', body, 'daily-odo-' + todayStr());
-}
-
-/* لو التطبيق مفتوح قبل الرابعة: نعمل تايمر لحد الساعة 4 */
-function scheduleOdoReminder() {
-  if (odoReminderTimer) return;
+function scheduleSlot(slot) {
+  if (odoTimers[slot.h]) return;
   const now = new Date();
-  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0);
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), slot.h, 0, 0);
   if (target <= now) return;
   const ms = target - now;
   if (ms > 2147483647) return; /* حد setTimeout */
-  odoReminderTimer = setTimeout(() => {
-    odoReminderTimer = null;
+  odoTimers[slot.h] = setTimeout(() => {
+    delete odoTimers[slot.h];
     dailyNudge();
   }, ms);
 }
 
+async function sendOdoSlot(slot) {
+  if (S.notifications === false) return false;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+  return await showMaintNotification('📍 وقت تسجيل الكيلومتر — ' + slot.label, slot.body, 'odo-' + slot.tagPart + '-' + todayStr());
+}
+
+/* بنفحص كل موعد: لو وقته فات ومتبعتش → نبعت فورًا. ولو لسه ما جاش → تايمر */
 async function dailyNudge() {
   const today = todayStr();
-  const lastDay = await kvGet('lastOdoNudgeDay', '');
-  if (lastDay === today) { scheduleOdoReminder(); return; }
-  const now = new Date();
-  if (now.getHours() < 16) { scheduleOdoReminder(); return; } /* لسه ما جتش الساعة 4 */
-
-  await kvSet('lastOdoNudgeDay', today);
-  const sent = await sendDailyOdoReminder();
+  let sentAny = false;
+  for (const slot of ODO_SLOTS) {
+    if ((await kvGet(slot.key, '')) === today) continue;
+    if (new Date().getHours() < slot.h) { scheduleSlot(slot); continue; }
+    await kvSet(slot.key, today);
+    if (await sendOdoSlot(slot)) sentAny = true;
+  }
   /* إشعار منفصل لكل حاجة قربت أو فاتت — والساكت لو مفيش */
   await notifyDueItems();
 
-  if (!sent && Nav.current === 'home') {
-    toast('📍 الساعة 4 — سجّل عدادك النهاردة', {
-      duration: 9000, actionLabel: 'تحديث العداد', onAction: () => openQuickOdoModal()
+  if (!sentAny && Nav.current === 'home') {
+    toast('📍 سجّل عدادك النهاردة — الصبح والساعة 4', {
+      duration: 8000, actionLabel: 'تحديث العداد', onAction: () => openQuickOdoModal()
     });
   }
 }
 
-/* اسم قديم للـ boot/README */
+/* اسم قديم للـ boot / التوثيق */
 const weeklyNudge = dailyNudge;
+
+/* زرار تجريبي عشان تتأكد إن الإشعارات شغالة على جهازك */
+async function sendTestNotification() {
+  if (!('Notification' in window)) { toast('المتصفح ده مش بيدعم الإشعارات'); return false; }
+  if (Notification.permission === 'denied') {
+    toast('الإشعارات مقفولة — افتحها من إعدادات الموقع للصفحة دي');
+    return false;
+  }
+  if (Notification.permission !== 'granted') {
+    let p = 'default';
+    try { p = await Notification.requestPermission(); } catch (e) {}
+    if (p !== 'granted') { toast('مش هتشوف إشعارات — فعّلها من إعدادات الموقع'); return false; }
+  }
+  const ok = await showMaintNotification('🔔 إشعار تجريبي', 'الإشعارات شغالة ✅ — هتجيك تذكيرات العداد الساعة 10 والساعة 4 كل يوم.', 'test-' + Date.now());
+  toast(ok ? '✅ بعتلك إشعار تجريبي — شوف شريط الإشعارات' : '⚠️ المتصفح رفض الإشعار — جرّبه من الوضع المثبت (Add to Home Screen)');
+  return ok;
+}
 
 /* تفعيل إشعارات الصيانة (بيُطلب من الإعدادات أو بعد الترحيب) */
 async function enableNotifications(ask) {

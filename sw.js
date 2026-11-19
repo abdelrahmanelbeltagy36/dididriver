@@ -1,6 +1,6 @@
 /* Service Worker — إدارة دخل السائق (offline-first app shell) */
 'use strict';
-const CACHE = 'driver-income-v13';
+const CACHE = 'driver-income-v14';
 const ASSETS = [
   './',
   './index.html',

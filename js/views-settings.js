@@ -30,12 +30,14 @@ Views.settings = async function (root) {
     : Notification.permission === 'granted' ? 'مفعّلة ✓'
     : Notification.permission === 'denied' ? 'مقفولة من إعدادات المتصفح' : 'لم تُطلب بعد';
   html += '<div class="card"><div class="card-title">🔔 إشعارات الصيانة</div>' +
-    '<div class="t2" style="line-height:1.8">إشعار <b>كل يوم الساعة 4 العصر</b> لتسجيل الكيلومتر — الوقت اللي غالبًا تكون فيه في العربية. ولو حاجة قربت أو فاتت، كل حاجة ليها إشعار لوحدها. ولو طنشت يوم، الإشعار يرجع لك في اليوم اللي بعده. وترقد تعدّل العداد من زرار جوه الإشعار.</div>' +
+    '<div class="t2" style="line-height:1.8">تذكير العداد <b>كل يوم الساعة 10 الصبح والساعة 4 العصر</b>. لو التطبيق كان مفتوح، الإشعار بيجي في الوقت؛ ولو قفلته وفتحته بعد الوقت، بيجيك فورًا. ولو حاجة قربت أو فاتت، كل حاجة ليها إشعار لوحدها. وترقد تعدّل العداد من زرار جوه الإشعار.</div>' +
+    '<div class="t2" style="margin-top:6px;color:var(--sub)">📌 نسخة الويب مش بتبعت إشعار والتطبيق مقفول تمامًا — ده محتاج نسخة أندرويد أصلية (FCM).</div>' +
     '<div class="kv" style="margin-top:8px"><span class="k">الحالة</span><span class="v">' + notifState + '</span></div>' +
     '<button class="btn btn-pri btn-block" id="st-notif">' +
     (('Notification' in window) && Notification.permission === 'granted'
       ? (S.notifications === false ? '✅ إعادة تفعيل الإشعارات' : '🔕 إيقاف الإشعارات')
-      : '🔔 تفعيل الإشعارات') + '</button></div>';
+      : '🔔 تفعيل الإشعارات') + '</button>' +
+    '<button class="btn btn-block" id="st-notif-test" style="margin-top:6px">🧪 إرسال إشعار تجريبي (اتأكد دلوقتي)</button></div>';
 
   /* ---------- cloud account ---------- */
   if (Cloud.enabled()) {
@@ -258,6 +260,9 @@ function bindSettings(root) {
       if (++taps >= 7) { taps = 0; ST.admin = !ST.admin; go('settings'); }
     });
   }
+
+  const notifTestBtn = root.querySelector('#st-notif-test');
+  if (notifTestBtn) notifTestBtn.onclick = () => sendTestNotification();
 
   const logoutBtn = root.querySelector('#st-logout');
   if (logoutBtn) logoutBtn.onclick = async () => {
