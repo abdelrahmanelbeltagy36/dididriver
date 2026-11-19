@@ -1,6 +1,6 @@
 /* Service Worker — إدارة دخل السائق (offline-first app shell) */
 'use strict';
-const CACHE = 'driver-income-v8';
+const CACHE = 'driver-income-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -38,6 +38,23 @@ self.addEventListener('activate', (e) => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
     self.clients.claim();
+  })());
+});
+
+/* 🔔 notification click — يفتح التطبيق على خانة العداد السريعة مباشرة */
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = './index.html?quick=odo';
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.includes('dididriver') || c.url.includes('localhost')) {
+        await c.focus();
+        try { c.postMessage({ type: 'open-quick-odo' }); } catch (err) {}
+        return;
+      }
+    }
+    await self.clients.openWindow(target);
   })());
 });
 

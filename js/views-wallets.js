@@ -3,7 +3,7 @@
 
 Views.wallets = async function (root) {
   root.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
-  const sessions = await DB.all('sessions');
+  const sessions = modeSessions(await DB.all('sessions'));
   const purchases = (await DB.all('purchases')).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt - a.createdAt));
   const maints = await DB.all('maintenance');
   const W = walletBalances(sessions, purchases, maints);
@@ -37,6 +37,23 @@ Views.wallets = async function (root) {
     '<button class="btn btn-sm btn-pri" id="fuel-add">＋ شراء وقود</button>') +
     walletCard('خزنة الصيانة', '🔧', W.maintBal, W.maintIn, W.maintOut, monthMaint, maintExtra, 'res-t',
     '<button class="btn btn-sm btn-pri" id="maint-add">＋ تسجيل صيانة</button>');
+
+  /* الوضع العادي: تقدير المصاريف من المصاريف الفعلية القديمة */
+  if (isDaily()) {
+    const est = estimatedCostPerKm(sessions, purchases, maints);
+    const spent = purchases.reduce((a, p) => a + (+p.amount || 0), 0) + maints.reduce((a, m) => a + (+m.cost || 0), 0);
+    const kmAll = sessions.reduce((a, s) => a + (+s.km || 0), 0);
+    html += '<div class="card"><div class="card-title">📊 تقدير مصاريفك</div>' +
+      '<div class="stat-grid">' +
+      '<div class="stat"><div class="lbl">متوسط التكلفة الفعلية</div><div class="val res-t">' + money(est.value) + ' <span class="small">/كم</span></div></div>' +
+      '<div class="stat"><div class="lbl">إجمالي مصروف فعلي</div><div class="val neg-t">' + money(spent) + '</div></div>' +
+      '<div class="stat"><div class="lbl">كيلومترات مسجّلة</div><div class="val">' + fmtN(kmAll) + '</div></div>' +
+      '<div class="stat"><div class="lbl">مصروف هذا الشهر</div><div class="val">' + money(monthFuel + monthMaint) + '</div></div>' +
+      '</div>' +
+      '<div class="t2" style="margin-top:8px">' + (est.source === 'actual'
+        ? 'التقدير جاي من مصاريفك الفعلية القديمة — بدون أي زيادة.'
+        : 'لسه مفيش مصاريف كافية — التقدير مؤقت من إعدادات الوقود والصيانة. سجّل مشتريات لتطويره.') + '</div></div>';
+  }
 
   /* explanation card */
   html += '<div class="card tight"><div class="t2" style="font-size:.8rem;line-height:1.8;color:var(--sub)">' +

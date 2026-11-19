@@ -10,6 +10,15 @@ const METRICS = [
   { k: 'profitPerKm', l: 'ربح / كم', f: v => money(v) },
   { k: 'profitPerHour', l: 'ربح / ساعة', f: v => money(v) }
 ];
+/* الوضع العادي: مصاريف بس — كل الأرقام تكاليف مش أرباح */
+const DAILY_METRICS = [
+  { l: 'الكيلومترات', get: st => st.km, f: v => fmtN(v) + ' كم' },
+  { l: 'ساعات القيادة', get: st => st.hours, f: v => fmtN(v) + ' س' },
+  { l: 'تكلفة متوقعة', get: st => -st.profit, f: v => money(v) },
+  { l: 'تكلفة / كم', get: st => st.km ? -st.profit / st.km : 0, f: v => money(v) },
+  { l: 'تكلفة / ساعة', get: st => st.hours ? -st.profit / st.hours : 0, f: v => money(v) },
+  { l: 'مصروف فعلي', get: st => st.direct, f: v => money(v) }
+];
 
 function currentOdo(sessions, maints) {
   let o = +S.odo || 0;
@@ -21,10 +30,11 @@ function currentOdo(sessions, maints) {
   return o;
 }
 
-function comparisonList(cur, prev) {
-  return METRICS.map(m => {
-    const c = cur[m.k] || 0;
-    const p = prev ? (prev[m.k] || 0) : 0;
+function comparisonList(cur, prev, metrics) {
+  metrics = metrics || METRICS;
+  return metrics.map(m => {
+    const c = m.get ? (m.get(cur) || 0) : (cur[m.k] || 0);
+    const p = m.get ? (prev ? (m.get(prev) || 0) : 0) : (prev ? (prev[m.k] || 0) : 0);
     const ch = prev ? pctChange(c, p) : null;
     const diff = prev ? c - p : null;
     return '<div class="chg-row">' +
@@ -38,9 +48,10 @@ function comparisonList(cur, prev) {
 
 Views.home = async function (root) {
   root.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
-  const sessions = await DB.all('sessions');
+  const sessions = modeSessions(await DB.all('sessions'));
   const purchases = await DB.all('purchases');
   const maints = await DB.all('maintenance');
+  const est = estimatedCostPerKm(sessions, purchases, maints);
   const W = walletBalances(sessions, purchases, maints);
   const { latest, prev, days } = latestAndPrevDays(sessions);
   const today = todayStr();
@@ -74,6 +85,23 @@ Views.home = async function (root) {
     const prevS = prev ? dayStats(sessions, prev) : null;
     const chProfit = prevS ? pctChange(cur.profit, prevS.profit) : null;
     const profitCls = cur.profit >= 0 ? 'pos-t' : 'neg-t';
+    if (isDaily()) {
+      const cost = -cur.profit;
+      html += '<div class="card hero"><div class="card-title">آخر يوم قيادة — ' + esc(fullDayLabel(latest)) + '</div>' +
+        '<div class="stat-grid cols3">' +
+        '<div class="stat big"><div class="lbl muted">تكلفة اليوم المتوقعة</div><div class="big-val res-t">' + money(cost) + '</div></div>' +
+        '<div class="stat big"><div class="lbl muted">الكيلومترات</div><div class="big-val">' + fmtN(cur.km) + ' كم</div></div>' +
+        '<div class="stat big"><div class="lbl muted">تكلفة/كم</div><div class="big-val">' + money(cur.km ? cost / cur.km : 0) + '</div></div>' +
+        '</div>' +
+        '<div class="divider" style="background:rgba(255,255,255,.25)"></div>' +
+        '<div class="stat-grid cols3">' +
+        '<div class="stat big"><div class="lbl muted">ساعات</div><div class="val">' + fmtN(cur.hours) + '</div></div>' +
+        '<div class="stat big"><div class="lbl muted">مصروف فعلي</div><div class="val">' + money(cur.direct) + '</div></div>' +
+        '<div class="stat big"><div class="lbl muted">تقدير وقود+صيانة</div><div class="val">' + money(cur.fuel + cur.maint) + '</div></div>' +
+        '</div>' +
+        '<div class="t2" style="margin-top:8px;color:rgba(255,255,255,.85)">📊 التقدير ' + (est.source === 'actual' ? 'مبني على مصاريفك الفعلية السابقة' : 'مؤقت من إعدادات الوقود والصيانة — سجّل مصاريف لتطويره') + '</div>' +
+        '</div>';
+    } else {
     html += '<div class="card hero">' +
       '<div class="card-title">آخر يوم عمل — ' + esc(fullDayLabel(latest)) + '</div>' +
       '<div class="stat-grid cols3">' +
@@ -106,11 +134,17 @@ Views.home = async function (root) {
         '</div>';
     }
     html += '</div>';
+    }
   } else {
-    html += '<div class="card"><div class="empty"><div class="ic">🚗</div>' +
-      '<div class="t">أهلاً بك في إدارة دخل السائق</div>' +
-      '<div class="d">ابدأ بتسجيل أول يوم عمل لتظهر كل الحسابات والمقارنات تلقائيًا.</div>' +
-      '<button class="btn btn-pri" onclick="go(\'add\')">＋ تسجيل أول يوم</button></div></div>';
+    html += isDaily()
+      ? '<div class="card"><div class="empty"><div class="ic">🚗</div>' +
+        '<div class="t">أهلاً بك في وضع القيادة اليومية</div>' +
+        '<div class="d">سجّل أول يوم قيادة — اكتب الكيلومترات وأي مصروف فعلي، والبرنامج هيقدّر لك التكلفة من مصاريفك.</div>' +
+        '<button class="btn btn-pri" onclick="go(\'add\')">＋ تسجيل أول يوم</button></div></div>'
+      : '<div class="card"><div class="empty"><div class="ic">🚗</div>' +
+        '<div class="t">أهلاً بك في إدارة دخل السائق</div>' +
+        '<div class="d">ابدأ بتسجيل أول يوم عمل لتظهر كل الحسابات والمقارنات تلقائيًا.</div>' +
+        '<button class="btn btn-pri" onclick="go(\'add\')">＋ تسجيل أول يوم</button></div></div>';
   }
 
   /* ---------- warnings ---------- */
@@ -140,12 +174,12 @@ Views.home = async function (root) {
 
   html += '<div class="card"><div class="card-title">📅 هذا الأسبوع مقابل الأسبوع الماضي' +
     '<span class="spacer"></span><span class="badge blue">من ' + dayLabel(wk) + '</span></div>' +
-    (wPrev.count || wCur.count ? comparisonList(wCur, wPrev) : '<div class="empty"><div class="d">لا توجد بيانات كافية بعد</div></div>') +
+    (wPrev.count || wCur.count ? comparisonList(wCur, wPrev, isDaily() ? DAILY_METRICS : METRICS) : '<div class="empty"><div class="d">لا توجد بيانات كافية بعد</div></div>') +
     '</div>';
 
   html += '<div class="card"><div class="card-title">🗓️ هذا الشهر مقابل الشهر الماضي' +
     '<span class="spacer"></span><span class="badge blue">' + esc(monthName(mk)) + '</span></div>' +
-    (mPrev.count || mCur.count ? comparisonList(mCur, mPrev) : '<div class="empty"><div class="d">لا توجد بيانات كافية بعد</div></div>') +
+    (mPrev.count || mCur.count ? comparisonList(mCur, mPrev, isDaily() ? DAILY_METRICS : METRICS) : '<div class="empty"><div class="d">لا توجد بيانات كافية بعد</div></div>') +
     '</div>';
 
   /* ---------- monthly target ---------- */
@@ -176,7 +210,7 @@ Views.home = async function (root) {
           '<div class="avatar-dot">📅</div>' +
           '<div class="grow"><div class="t1">' + esc(fullDayLabel(d)) + '</div>' +
           '<div class="t2">' + fmtN(st.km) + ' كم • ' + fmtN(st.hours) + ' ساعة • ' + fmtN(st.count) + ' جلسة</div></div>' +
-          '<div class="side ' + (st.profit >= 0 ? 'pos-t' : 'neg-t') + '">' + money(st.profit) + '</div>' +
+          '<div class="side ' + (isDaily() ? 'res-t' : (st.profit >= 0 ? 'pos-t' : 'neg-t')) + '">' + money(isDaily() ? -st.profit : st.profit) + '</div>' +
           '</div>';
       }).join('') +
       '</div>';
@@ -197,6 +231,8 @@ Views.home = async function (root) {
     await saveSettings();
     toast('✅ تم تحديث العداد — كل المواعيد اتحدثت');
     go('home');
+    /* لو حاجة قربت أو فاتت بعد التحديث → إشعار منفصل لكل حاجة */
+    await notifyDueItems();
   };
 
   /* Pro promo card */
@@ -216,7 +252,7 @@ async function openDayDetail(date) {
   const rows = sessions.map(s => {
     const c = calcSession(s);
     return '<div class="session-card">' +
-      '<div class="sc-head"><span class="sc-title">' + esc(PLATFORMS[s.platform] || s.platform) + '</span>' +
+      '<div class="sc-head"><span class="sc-title">' + (isDaily() ? '🚗 يوم قيادة' : esc(PLATFORMS[s.platform] || s.platform)) + '</span>' +
       '<span>' + vBtn('sessions', s.id) + eBtn('edit-session') + dBtn('del-session', s.id) + '</span></div>' +
       '<input type="hidden" data-rid="' + s.id + '">' +
       '<div class="kv"><span class="k">الدخل (' + (s.mode === 'gross' ? 'إجمالي' : 'صافي') + ')</span><span class="v">' + money(s.amount) + '</span></div>' +
@@ -225,7 +261,7 @@ async function openDayDetail(date) {
       '<div class="kv"><span class="k">كم • ساعات • رحلات</span><span class="v">' + fmtN(s.km) + ' • ' + fmtN(s.hours) + ' • ' + fmtN(s.trips) + '</span></div>' +
       (s.directExpenses ? '<div class="kv"><span class="k">مصاريف مباشرة</span><span class="v neg-t">' + money(s.directExpenses) + '</span></div>' : '') +
       '<div class="kv"><span class="k">مخصص وقود + صيانة</span><span class="v res-t">' + money(c.fuelRes + c.maintRes) + '</span></div>' +
-      '<div class="kv"><span class="k">الربح الشخصي للجلسة</span><span class="v ' + (c.profit >= 0 ? 'pos-t' : 'neg-t') + '">' + money(c.profit) + '</span></div>' +
+      '<div class="kv"><span class="k">' + (isDaily() ? 'تكلفة اليوم المتوقعة' : 'الربح الشخصي للجلسة') + '</span><span class="v ' + (isDaily() ? 'res-t' : (c.profit >= 0 ? 'pos-t' : 'neg-t')) + '">' + money(isDaily() ? -c.profit : c.profit) + '</span></div>' +
       (s.notes ? '<div class="t2">📝 ' + esc(s.notes) + '</div>' : '') +
       '</div>';
   }).join('');
@@ -233,9 +269,13 @@ async function openDayDetail(date) {
   openModal(
     '<div class="modal-title">يوم ' + esc(fullDayLabel(date)) + '</div>' +
     '<div class="stat-grid cols3" style="margin-bottom:12px">' +
-    '<div class="stat"><div class="lbl">صافي الدخل</div><div class="val">' + money(st.net) + '</div></div>' +
-    '<div class="stat"><div class="lbl">الربح الشخصي</div><div class="val ' + (st.profit >= 0 ? 'pos-t' : 'neg-t') + '">' + money(st.profit) + '</div></div>' +
-    '<div class="stat"><div class="lbl">هامش</div><div class="val">' + fmtPct(st.margin) + '</div></div>' +
+    (isDaily()
+      ? '<div class="stat"><div class="lbl">مصروف فعلي</div><div class="val">' + money(st.direct) + '</div></div>' +
+        '<div class="stat"><div class="lbl">تكلفة متوقعة</div><div class="val res-t">' + money(-st.profit) + '</div></div>' +
+        '<div class="stat"><div class="lbl">كيلومترات</div><div class="val">' + fmtN(st.km) + '</div></div>'
+      : '<div class="stat"><div class="lbl">صافي الدخل</div><div class="val">' + money(st.net) + '</div></div>' +
+        '<div class="stat"><div class="lbl">الربح الشخصي</div><div class="val ' + (st.profit >= 0 ? 'pos-t' : 'neg-t') + '">' + money(st.profit) + '</div></div>' +
+        '<div class="stat"><div class="lbl">هامش</div><div class="val">' + fmtPct(st.margin) + '</div></div>') +
     '</div>' + rows +
     '<div class="modal-actions">' +
     '<button class="btn" onclick="closeModal()">إغلاق</button>' +

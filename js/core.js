@@ -39,6 +39,8 @@ const DEFAULT_INTERVALS = {
 };
 
 const DEFAULT_SETTINGS = {
+  mode: 'driver',              /* 'driver' = ديدي/أوبر • 'daily' = قيادة يومية (مصاريف بس) */
+  notifications: true,         /* إشعارات الصيانة كل 3 أيام */
   vehicleName: 'تويوتا كورولا 2008',
   plate: '',
   odo: 0,
@@ -66,6 +68,33 @@ async function loadSettings() {
 
 async function saveSettings() {
   await DB.put('settings', { id: 'main', value: S });
+}
+
+/* ---------- الوضعان: سائق (دخل) / قيادة يومية (مصاريف بس) ---------- */
+function isDaily() { return S.mode === 'daily'; }
+/* السجلات القديمة بدون kind تُعتبر سائق — عشان ما تضيعش بيانات حد */
+function modeSessions(list) {
+  return (list || []).filter(s => (s.kind || 'driver') === S.mode);
+}
+
+/* ---------- تقدير المصاريف من المصاريف الفعلية القديمة (بدون زيادة) ---------- */
+function actualCostPerKm(sessions, purchases, maints) {
+  const km = (sessions || []).reduce((a, s) => a + (+s.km || 0), 0);
+  if (!(km > 0)) return null;
+  const spent = (purchases || []).reduce((a, p) => a + (+p.amount || 0), 0) +
+                (maints || []).reduce((a, m) => a + (+m.cost || 0), 0);
+  if (!(spent > 0)) return null;
+  return spent / km;
+}
+/* التقدير: مصاريفك الفعلية أولًا، ولو مفيش تاريخ نستخدم إعدادات الوقود/الصيانة */
+function estimatedCostPerKm(sessions, purchases, maints) {
+  const actual = actualCostPerKm(sessions, purchases, maints);
+  if (actual && actual > 0) return { value: actual, source: 'actual' };
+  return { value: (+S.l100 || 0) / 100 * (+S.fuelPrice || 0) + (+S.maintPerKm || 0), source: 'settings' };
+}
+/* تكلفة يوم في الوضع العادي = كم × التقدير + أي مصروف فعلي كتبه */
+function dayCostEstimate(s, estPerKm) {
+  return (+s.km || 0) * (estPerKm || 0) + (+s.directExpenses || 0);
 }
 
 async function kvGet(key, fallback) {

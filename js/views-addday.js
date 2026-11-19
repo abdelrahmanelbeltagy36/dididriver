@@ -33,13 +33,24 @@ Views.add = async function (root) {
   }
   Nav.params = {};
 
+  /* تقدير المصاريف بيجي من المصاريف الفعلية القديمة (أو من الإعدادات أول مرة) */
+  AddDay.est = estimatedCostPerKm(
+    modeSessions(await DB.all('sessions')),
+    await DB.all('purchases'),
+    await DB.all('maintenance')
+  );
+
   root.innerHTML =
     '<div class="card">' +
-    field('تاريخ اليوم', '<input class="input" type="date" id="ad-date" value="' + AddDay.date + '">') +
-    '<div class="t2 muted" style="font-size:.78rem">يمكن تسجيل عدة جلسات/تطبيقات في نفس اليوم — تُجمع في تقرير واحد مع بقاء تفصيل كل تطبيق.</div>' +
+    field(isDaily() ? 'تاريخ اليوم' : 'تاريخ اليوم', '<input class="input" type="date" id="ad-date" value="' + AddDay.date + '">') +
+    '<div class="t2 muted" style="font-size:.78rem">' +
+    (isDaily()
+      ? 'وضع القيادة اليومية: بتسجّل مصاريف بس — والبرنامج يقدّر تكلفة اليوم من مصاريفك الفعلية السابقة.'
+      : 'يمكن تسجيل عدة جلسات/تطبيقات في نفس اليوم — تُجمع في تقرير واحد مع بقاء تفصيل كل تطبيق.') +
+    '</div>' +
     '</div>' +
     '<div id="ad-cards"></div>' +
-    '<button class="btn btn-block" id="ad-add-session" style="margin-bottom:12px">＋ إضافة جلسة / تطبيق آخر</button>' +
+    (isDaily() ? '' : '<button class="btn btn-block" id="ad-add-session" style="margin-bottom:12px">＋ إضافة جلسة / تطبيق آخر</button>') +
     '<div class="card" id="ad-preview"></div>' +
     '<div class="save-bar"><button class="btn btn-pos btn-block" id="ad-save">💾 حفظ اليوم</button></div>';
 
@@ -55,6 +66,23 @@ function renderAddCards() {
 }
 
 function addCardHTML(d, i) {
+  /* الوضع العادي: مصاريف بس — من غير دخل/عمولة/بقشيش/رحلات */
+  if (isDaily()) {
+    return '<div class="session-card" data-idx="' + i + '">' +
+      '<div class="sc-head"><span class="sc-title">🚗 يوم قيادة</span></div>' +
+      '<div class="grid2">' +
+      field('إجمالي الكيلومترات 🛣️', numInput('km', d.km, 'مثال: 45')) +
+      field('ساعات القيادة (اختياري) ⏱️', numInput('hours', d.hours, 'مثال: 3')) +
+      '</div>' +
+      field('المصروف الفعلي اليوم (اختياري) 💸', numInput('directExpenses', d.directExpenses, 'وقوف، غسيل، مواصلات…')) +
+      '<div class="t2 muted" style="font-size:.78rem;margin:-4px 0 8px">اللي بتكتبه هنا بيتضاف لتقدير البنزين والصيانة — وبيغذّي التقدير للأيام الجاية.</div>' +
+      '<div class="grid2">' +
+      field('عداد البداية (اختياري)', numInput('odoStart', d.odoStart, '')) +
+      field('عداد النهاية (اختياري)', numInput('odoEnd', d.odoEnd, '')) +
+      '</div>' +
+      field('ملاحظات 📝', '<textarea class="input" data-f="notes" rows="2" placeholder="ملاحظات اليوم…">' + esc(d.notes || '') + '</textarea>') +
+      '</div>';
+  }
   const gross = d.mode === 'gross';
   return '<div class="session-card" data-idx="' + i + '">' +
     '<div class="sc-head"><span class="sc-title">جلسة ' + (i + 1) + '</span>' +
@@ -150,7 +178,8 @@ function bindAddEvents(root) {
     }
   });
 
-  root.querySelector('#ad-add-session').onclick = () => {
+  const addSessionBtn = root.querySelector('#ad-add-session');
+  if (addSessionBtn) addSessionBtn.onclick = () => {
     const last = AddDay.drafts[AddDay.drafts.length - 1];
     const nd = blankDraft();
     nd.odoStart = last && last.odoEnd ? last.odoEnd : '';
@@ -167,6 +196,32 @@ function bindAddEvents(root) {
 function updatePreview() {
   const box = document.getElementById('ad-preview');
   if (!box) return;
+
+  /* معاينة الوضع العادي: التكلفة المتوقعة من مصاريفك القديمة */
+  if (isDaily()) {
+    const est = AddDay.est || estimatedCostPerKm([], [], []);
+    const d = AddDay.drafts[0] || blankDraft();
+    const km = +d.km || 0, hours = +d.hours || 0, direct = +d.directExpenses || 0;
+    const fuelMaint = km * est.value;
+    const total = fuelMaint + direct;
+    const src = est.source === 'actual'
+      ? 'من <b>مصاريفك الفعلية القديمة</b> — بدون أي زيادة'
+      : 'لسه مفيش مصاريف كافية — تقدير مؤقت من إعدادات الوقود والصيانة';
+    box.innerHTML =
+      '<div class="card-title">👁️ تكلفة اليوم المتوقعة</div>' +
+      '<div class="formula" style="margin-bottom:10px">📊 مصدر التقدير: ' + src + '<br>' +
+      'تكلفة الكيلومتر = <b>' + fmtN(est.value) + ' ج.م/كم</b></div>' +
+      '<div class="preview-num"><span class="pl">🛣️ الكيلومترات</span><span class="pv">' + fmtN(km) + ' كم</span></div>' +
+      '<div class="preview-num"><span class="pl">⛽+🔧 وقود وصيانة متوقعة (' + fmtN(km) + ' × ' + fmtN(est.value) + ')</span><span class="pv res-t">' + money(fuelMaint) + '</span></div>' +
+      '<div class="preview-num"><span class="pl">💸 مصروف فعلي كتبته</span><span class="pv neg-t">' + money(direct) + '</span></div>' +
+      '<div class="preview-num preview-total"><span class="pl" style="font-weight:800;color:var(--txt)">إجمالي تكلفة اليوم</span><span class="pv res-t">' + money(total) + '</span></div>' +
+      '<div class="stat-grid" style="margin-top:10px">' +
+      '<div class="stat"><div class="lbl">تكلفة/كم</div><div class="val">' + money(km ? total / km : 0) + '</div></div>' +
+      '<div class="stat"><div class="lbl">تكلفة/ساعة</div><div class="val">' + money(hours ? total / hours : 0) + '</div></div>' +
+      '</div>';
+    return;
+  }
+
   const cals = AddDay.drafts.map(draftCalc);
   let net = 0, commission = 0, fuel = 0, maint = 0, direct = 0, km = 0, hours = 0, trips = 0;
   cals.forEach(c => { net += c.effNet; commission += c.commission; fuel += c.fuelRes; maint += c.maintRes; direct += c.direct; km += c.km; hours += c.hours; });
@@ -206,22 +261,28 @@ function updatePreview() {
 
 async function saveDay() {
   if (!AddDay.date) { toast('اختر تاريخ اليوم'); return; }
-  const valid = AddDay.drafts.filter(d => +d.amount > 0);
-  if (!valid.length) { toast('أدخل دخلًا أكبر من صفر في جلسة واحدة على الأقل'); return; }
-  const existing = (await DB.all('sessions')).filter(s => s.date === AddDay.date);
+  const daily = isDaily();
+  const valid = daily
+    ? AddDay.drafts.filter(d => (+d.km > 0 || +d.directExpenses > 0))
+    : AddDay.drafts.filter(d => +d.amount > 0);
+  if (!valid.length) {
+    toast(daily ? 'اكتب الكيلومترات أو مصروف فعلي واحد على الأقل' : 'أدخل دخلًا أكبر من صفر في جلسة واحدة على الأقل');
+    return;
+  }
 
   const records = valid.map(d => ({
     id: uid(),
+    kind: S.mode,
     date: AddDay.date,
-    platform: d.platform,
-    mode: d.mode,
-    amount: +d.amount,
-    commissionPct: d.mode === 'gross' ? (+d.commissionPct || 0) : 0,
-    tips: +d.tips || 0,
-    tipsIncluded: !!d.tipsIncluded,
+    platform: daily ? 'other' : d.platform,
+    mode: daily ? 'net' : d.mode,
+    amount: daily ? 0 : +d.amount,
+    commissionPct: (!daily && d.mode === 'gross') ? (+d.commissionPct || 0) : 0,
+    tips: daily ? 0 : (+d.tips || 0),
+    tipsIncluded: daily ? true : !!d.tipsIncluded,
     km: +d.km || 0,
     hours: +d.hours || 0,
-    trips: +d.trips || 0,
+    trips: daily ? 0 : (+d.trips || 0),
     directExpenses: +d.directExpenses || 0,
     odoStart: +d.odoStart || null,
     odoEnd: +d.odoEnd || null,
@@ -229,7 +290,7 @@ async function saveDay() {
     snap: { fuelPrice: S.fuelPrice, l100: S.l100, maintKm: S.maintPerKm },
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    history: [{ ts: Date.now(), action: 'create', by: 'إضافة يوم' }]
+    history: [{ ts: Date.now(), action: 'create', by: daily ? 'تسجيل يوم' : 'إضافة يوم' }]
   }));
 
   await DB.bulkPut('sessions', records);
@@ -242,7 +303,7 @@ async function saveDay() {
     await saveSettings();
   }
 
-  toast('✅ تم حفظ ' + records.length + ' جلسة ليوم ' + fullDayLabel(AddDay.date), { duration: 4500 });
+  toast((daily ? '✅ تم تسجيل يوم قيادة — ' : '✅ تم حفظ ' + records.length + ' جلسة ليوم ') + fullDayLabel(AddDay.date), { duration: 4500 });
   AddDay.drafts = [blankDraft()];
   Nav.params = { date: AddDay.date };
   go('add');

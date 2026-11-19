@@ -7,7 +7,35 @@ Views.settings = async function (root) {
   root.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
   const mk = monthKey(todayStr());
 
+  /* متوسط مصاريفك الفعلية — أساس التقدير في الوضع العادي */
+  const dailyEst = isDaily()
+    ? estimatedCostPerKm(modeSessions(await DB.all('sessions')), await DB.all('purchases'), await DB.all('maintenance'))
+    : null;
+
   let html = '';
+
+  /* ---------- الوضع: سائق / قيادة يومية ---------- */
+  html += '<div class="card" style="border-color:var(--pri)"><div class="card-title">🧭 نمط التطبيق</div>' +
+    '<div class="seg" id="st-mode">' +
+    '<button type="button" data-v="driver" class="' + (!isDaily() ? 'on' : '') + '">🚕 ديدي / أوبر</button>' +
+    '<button type="button" data-v="daily" class="' + (isDaily() ? 'on' : '') + '">🚗 قيادة يومية</button>' +
+    '</div>' +
+    '<div class="t2" style="margin-top:8px;line-height:1.8">' + (isDaily()
+      ? 'الوضع الحالي: <b>مصاريف بس</b> — التكلفة المتوقعة بتتقدّم من مصاريفك الفعلية القديمة، من غير دخل أو عمولات.'
+      : 'الوضع الحالي: <b>دخل السائق</b> — ديدي/أوبر مع العمولات وحساب الربح الشخصي.') + '</div>' +
+    '<div class="t2" style="margin-top:4px">تغيير النمط بيخبي سجلات النمط التاني ويظهر سجلات النمط ده — وكل البيانات محفوظة.</div></div>';
+
+  /* ---------- إشعارات الصيانة ---------- */
+  const notifState = !('Notification' in window) ? 'المتصفح مش بيدعم الإشعارات'
+    : Notification.permission === 'granted' ? 'مفعّلة ✓'
+    : Notification.permission === 'denied' ? 'مقفولة من إعدادات المتصفح' : 'لم تُطلب بعد';
+  html += '<div class="card"><div class="card-title">🔔 إشعارات الصيانة</div>' +
+    '<div class="t2" style="line-height:1.8">إشعار <b>مرة كل 3 أيام</b> لكل حاجة قربت أو فاتت — وكل حاجة ليها إشعار لوحدها. ولو مفيش حاجة، مفيش إشعار خالص. وترقد تعدّل العداد من زرار جوه الإشعار.</div>' +
+    '<div class="kv" style="margin-top:8px"><span class="k">الحالة</span><span class="v">' + notifState + '</span></div>' +
+    '<button class="btn btn-pri btn-block" id="st-notif">' +
+    (('Notification' in window) && Notification.permission === 'granted'
+      ? (S.notifications === false ? '✅ إعادة تفعيل الإشعارات' : '🔕 إيقاف الإشعارات')
+      : '🔔 تفعيل الإشعارات') + '</button></div>';
 
   /* ---------- vehicle ---------- */
   html += '<div class="card"><div class="card-title">🚗 العربية</div>' +
@@ -35,20 +63,27 @@ Views.settings = async function (root) {
     '<div class="formula" style="margin-bottom:10px">' +
     'تكلفة الوقود/كم = ' + fmtN(S.l100) + ' ÷ 100 × ' + fmtN(S.fuelPrice) + ' = <b>' + fmtN(S.l100 / 100 * S.fuelPrice) + ' ج.م</b><br>' +
     'إجمالي المخصص/كم = <b>' + fmtN(S.l100 / 100 * S.fuelPrice + S.maintPerKm) + ' ج.م</b> (وقود + صيانة)</div>' +
+    (isDaily()
+      ? '<div class="formula" style="margin-bottom:10px">📊 متوسط مصاريفك الفعلية: <b>' + fmtN(dailyEst.value) + ' ج.م/كم</b> ' +
+        (dailyEst.source === 'actual' ? '(من مشتريات البنزين والصيانة اللي سجلتها)' : '(لسه مفيش مصاريف كافية — ده تقدير مؤقت)') +
+        '<br>ده الرقم اللي بيحسب منه تقدير مصاريف الأيام الجاية — بدون أي زيادة.</div>'
+      : '') +
     '<div class="t2" style="margin-bottom:10px">⚠️ تغيير الإعدادات يؤثر على الأيام الجديدة فقط — كل سجل محفوظ يحتفظ بلقطة إعداداته الخاصة للأبد.</div>' +
     '<button class="btn btn-pri btn-block" id="st-fuel-save">💾 حفظ إعدادات الوقود</button></div>';
 
-  /* ---------- commissions & target ---------- */
-  html += '<div class="card"><div class="card-title">📱 العمولات وهدف الأيام</div>' +
-    '<div class="grid2">' +
-    field('عمولة ديدي %', '<input class="input" id="st-c-didi" type="number" step="any" inputmode="decimal" value="' + S.commission.didi + '">') +
-    field('عمولة أوبر %', '<input class="input" id="st-c-uber" type="number" step="any" inputmode="decimal" value="' + S.commission.uber + '">') +
-    '</div>' +
-    '<div class="grid2">' +
-    field('عمولة أخرى %', '<input class="input" id="st-c-other" type="number" step="any" inputmode="decimal" value="' + S.commission.other + '">') +
-    field('هدف أيام العمل شهريًا', '<input class="input" id="st-target" type="number" inputmode="decimal" value="' + S.targetDays + '">') +
-    '</div>' +
-    '<button class="btn btn-pri btn-block" id="st-target-save">💾 حفظ</button></div>';
+  /* ---------- commissions & target (السائقين بس) ---------- */
+  if (!isDaily()) {
+    html += '<div class="card"><div class="card-title">📱 العمولات وهدف الأيام</div>' +
+      '<div class="grid2">' +
+      field('عمولة ديدي %', '<input class="input" id="st-c-didi" type="number" step="any" inputmode="decimal" value="' + S.commission.didi + '">') +
+      field('عمولة أوبر %', '<input class="input" id="st-c-uber" type="number" step="any" inputmode="decimal" value="' + S.commission.uber + '">') +
+      '</div>' +
+      '<div class="grid2">' +
+      field('عمولة أخرى %', '<input class="input" id="st-c-other" type="number" step="any" inputmode="decimal" value="' + S.commission.other + '">') +
+      field('هدف أيام العمل شهريًا', '<input class="input" id="st-target" type="number" inputmode="decimal" value="' + S.targetDays + '">') +
+      '</div>' +
+      '<button class="btn btn-pri btn-block" id="st-target-save">💾 حفظ</button></div>';
+  }
 
   /* ---------- intervals ---------- */
   const ivSessions = await DB.all('sessions');
@@ -213,6 +248,45 @@ function bindSettings(root) {
     });
   }
 
+  /* تغيير النمط (سائق / قيادة يومية) */
+  root.querySelectorAll('#st-mode button').forEach(b => b.onclick = async () => {
+    const v = b.dataset.v;
+    if (v === S.mode) return;
+    const ok = await confirmDlg({
+      title: 'تغيير نمط التطبيق؟',
+      body: v === 'daily'
+        ? 'هنتقل لوضع <b>القيادة اليومية</b>: مصاريف بس من غير دخل وعمولات. سجلات ديدي/أوبر هتتخبى ومش هتتمسح.'
+        : 'هنتقل لوضع <b>دخل السائق</b>: ديدي/أوبر وحساب الربح الشخصي. سجلات القيادة اليومية هتتخبى ومش هتتمسح.',
+      okText: 'تغيير النمط'
+    });
+    if (!ok) return;
+    S.mode = v;
+    await saveSettings();
+    applyModeLabels();
+    toast('✅ تم تغيير النمط — سجلاتك محفوظة');
+    go('settings');
+  });
+
+  /* إشعارات الصيانة */
+  const notifBtn = root.querySelector('#st-notif');
+  if (notifBtn) notifBtn.onclick = async () => {
+    if (('Notification' in window) && Notification.permission === 'granted') {
+      if (S.notifications === false) {
+        S.notifications = true; await saveSettings();
+        toast('✅ الإشعارات مفعّلة تاني');
+        go('settings');
+        await notifyDueItems({ force: true });
+      } else {
+        S.notifications = false; await saveSettings();
+        toast('🔕 الإشعارات متوقفة');
+        go('settings');
+      }
+      return;
+    }
+    await enableNotifications(true);
+    go('settings');
+  };
+
   root.querySelector('#st-photo-btn').onclick = () => pickImage(d => {
     ST.photoTmp = d;
     const prev = root.querySelector('#st-photo-prev');
@@ -239,7 +313,8 @@ function bindSettings(root) {
     go('settings');
   };
 
-  root.querySelector('#st-target-save').onclick = async () => {
+  const targetSave = root.querySelector('#st-target-save');
+  if (targetSave) targetSave.onclick = async () => {
     S.commission.didi = +root.querySelector('#st-c-didi').value || 0;
     S.commission.uber = +root.querySelector('#st-c-uber').value || 0;
     S.commission.other = +root.querySelector('#st-c-other').value || 0;

@@ -38,7 +38,7 @@ async function renderArchiveTab() {
 
 /* ================= 1) daily history ================= */
 async function renderDaysTab(body) {
-  const sessions = await DB.all('sessions');
+  const sessions = modeSessions(await DB.all('sessions'));
   if (!sessions.length) {
     body.innerHTML = '<div class="card"><div class="empty"><div class="ic">🗂️</div><div class="t">الأرشيف فاضٍ</div><div class="d">كل يوم تسجه يُحفظ هنا للأبد — لا شيء يُحذف عند بداية شهر جديد.</div></div></div>';
     return;
@@ -55,22 +55,24 @@ async function renderDaysTab(body) {
     const days = sortedDates(byMonth[mk]).reverse();
     return '<div class="card list-card">' +
       '<div class="card-title" style="padding:12px 0 4px">' + esc(monthName(mk)) +
-      '<span class="spacer"></span><span class="badge gray">صافي ' + money(st.net) + '</span>' +
-      '<span class="badge ' + (st.profit >= 0 ? 'green' : 'red') + '">ربح ' + money(st.profit) + '</span></div>' +
+      '<span class="spacer"></span>' + (isDaily()
+        ? '<span class="badge gray">كم ' + fmtN(st.km) + '</span><span class="badge orange">تكلفة ' + money(-st.profit) + '</span>'
+        : '<span class="badge gray">صافي ' + money(st.net) + '</span>' +
+          '<span class="badge ' + (st.profit >= 0 ? 'green' : 'red') + '">ربح ' + money(st.profit) + '</span>') + '</div>' +
       days.map(d => {
         const ds = dayStats(sessions, d);
         return '<div class="row-item" style="cursor:pointer" onclick="openDayDetail(\'' + d + '\')">' +
           '<div class="avatar-dot">' + parseYMD(d).getDate() + '</div>' +
           '<div class="grow"><div class="t1">' + weekdayName(d) + ' ' + dayLabel(d) + '</div>' +
           '<div class="t2">' + fmtN(ds.km) + ' كم • ' + fmtN(ds.hours) + ' س • ' + fmtN(ds.trips) + ' رحلة</div></div>' +
-          '<div class="side ' + (ds.profit >= 0 ? 'pos-t' : 'neg-t') + '">' + money(ds.profit) + '</div></div>';
+          '<div class="side ' + (isDaily() ? 'res-t' : (ds.profit >= 0 ? 'pos-t' : 'neg-t')) + '">' + money(isDaily() ? -ds.profit : ds.profit) + '</div></div>';
       }).join('') + '</div>';
   }).join('');
 }
 
 /* ================= 2) reports ================= */
 async function renderReportsTab(body) {
-  const sessions = await DB.all('sessions');
+  const sessions = modeSessions(await DB.all('sessions'));
   const purchases = await DB.all('purchases');
   const maints = await DB.all('maintenance');
   const closed = (await kvGet('closedMonths', [])) || [];
@@ -234,7 +236,7 @@ function monthPDF(sessions, purchases, maints) {
 /* ================= 3) maintenance log ================= */
 async function renderMaintTab(body) {
   const maints = (await DB.all('maintenance')).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt - a.createdAt));
-  const sessions = await DB.all('sessions');
+  const sessions = modeSessions(await DB.all('sessions'));
   const odo = currentOdo(sessions, maints);
   const today = todayStr();
 
