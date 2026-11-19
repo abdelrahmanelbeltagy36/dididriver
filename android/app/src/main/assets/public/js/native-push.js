@@ -17,13 +17,17 @@
     if (!isNative || !plugin) return; /* ويب عادي — نشوف الإشعارات بتاعة app.js */
     started = true;
 
+    function diag(msg) {
+      localStorage.setItem('didicloud_fcm_diag', msg);
+    }
     try {
       /* أندرويد 13+ محتاج إذن صريح */
       if (typeof plugin.requestPermissions === 'function') {
         const perm = await plugin.requestPermissions();
+        diag('perm=' + ((perm && perm.receive) || JSON.stringify(perm)));
         if (perm && perm.receive && perm.receive !== 'granted') return;
-      }
-    } catch (e) { /* أكمل محاولة التسجيل */ }
+      } else diag('perm=no-api');
+    } catch (e) { diag('perm-error=' + (e && e.message)); }
 
     async function trySaveToken() {
       const token = localStorage.getItem('didicloud_fcm_token') || '';
@@ -41,10 +45,12 @@
       plugin.addListener('registration', async (info) => {
         if (!info || !info.token) return;
         localStorage.setItem('didicloud_fcm_token', info.token);
+        diag('token=ok');
         await trySaveToken();
       });
 
       plugin.addListener('registrationError', (err) => {
+        diag('reg-error=' + ((err && err.message) || JSON.stringify(err)));
         console.warn('FCM registration error', err);
       });
 
@@ -65,8 +71,10 @@
         }
       });
 
-      await plugin.register();
+      const reg = await plugin.register();
+      diag('reg=' + (reg ? 'ok' : 'empty'));
     } catch (e) {
+      diag('init-error=' + (e && e.message));
       console.warn('push init failed', e);
     }
   }

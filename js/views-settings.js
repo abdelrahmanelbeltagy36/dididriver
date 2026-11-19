@@ -51,7 +51,8 @@ Views.settings = async function (root) {
       (typeof window.Capacitor) + ' • native=' + (!!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) +
       ' • plugin=' + (typeof (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications)) +
       ' • cap=' + (typeof window.Capacitor) +
-      ' • host=' + location.hostname + ' • native=' + (!!window.__NATIVE_WEBVIEW__) + '</div>' +
+      ' • host=' + location.hostname + ' • native=' + (!!window.__NATIVE_WEBVIEW__) +
+      ' • ' + (localStorage.getItem('didicloud_fcm_diag') || 'no-diag') + '</div>' +
       '<button class="btn btn-block" id="st-fcm-retry" style="margin-top:6px">🔄 إعادة محاولة تفعيل الإشعارات</button>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
   }
