@@ -39,7 +39,13 @@ jobs:
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          set +e
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            echo "::error::$(grep -iE 'FAILURE|What went wrong|Caused by|error:|Could not|SDK location|License' build.log | head -25 | tr '\n' ' ')"
+            exit $code
+          fi
 
       - name: رفع الـ APK
         uses: actions/upload-artifact@v4
