@@ -43,7 +43,7 @@ jobs:
           ./gradlew assembleDebug --no-daemon 2>&1 | tee build.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
-            echo "::error::$(grep -iE 'FAILURE|What went wrong|Caused by|error:|Could not|SDK location|License' build.log | head -25 | tr '\n' ' ')"
+            echo "::error::$(tail -60 build.log | tr '\n' ' ')"
             exit $code
           fi
 
