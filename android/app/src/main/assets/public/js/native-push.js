@@ -10,9 +10,10 @@
   async function initNativePush() {
     if (started) return;
     const cap = window.Capacitor;
-    const isNative = !!(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
-    const plugin = window.CapacitorPushNotifications ||
-      (cap && cap.Plugins && cap.Plugins.PushNotifications);
+    /* Capacitor بيحقن Plugins直接在 الـ WebView — مفيش isNativePlatform/capacitorExports */
+    const plugin = (cap && cap.Plugins && cap.Plugins.PushNotifications) ||
+      window.CapacitorPushNotifications;
+    const isNative = !!plugin || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     if (!isNative || !plugin) return; /* ويب عادي — نشوف الإشعارات بتاعة app.js */
     started = true;
 
