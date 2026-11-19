@@ -11,7 +11,8 @@
     if (started) return;
     const cap = window.Capacitor;
     const isNative = !!(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
-    const plugin = cap && cap.Plugins && cap.Plugins.PushNotifications;
+    const plugin = window.CapacitorPushNotifications ||
+      (cap && cap.Plugins && cap.Plugins.PushNotifications);
     if (!isNative || !plugin) return; /* ويب عادي — نشوف الإشعارات بتاعة app.js */
     started = true;
 

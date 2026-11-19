@@ -14,18 +14,4 @@ ext {
     androidxEspressoCoreVersion = '3.6.1'
     cordovaAndroidVersion = '10.1.1'
 }
-// trigger build b3d1e23
-
-// trigger build sdk
-
-// trigger build err
-
-// trigger build fix
-
-// trigger build tail
-
-// trigger build java21
-
-// trigger build assets
-
-// trigger build push plugin
+// trigger build fix2
