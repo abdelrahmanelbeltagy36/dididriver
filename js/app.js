@@ -164,6 +164,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     }, 500);
   }
 
+  /* 📱 FCM: إشعارات حقيقية حتى والتطبيق مقفول (نسخة أندرويد بس) */
+  if (typeof initNativePush === 'function') initNativePush();
+
   /* service worker for offline + installability */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     try { navigator.serviceWorker.register('sw.js'); } catch (e) { /* ignore */ }

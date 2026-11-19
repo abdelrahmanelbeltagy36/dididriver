@@ -164,6 +164,22 @@ const Cloud = (function () {
     await flush(); /* push anything created while offline */
   }
 
+  /* ---------- FCM token (للإشعارات والتطبيق مقفول) ---------- */
+  async function saveFcmToken(token) {
+    if (!enabled() || !signedIn() || !token) return false;
+    await api('rest/v1/fcm_tokens?on_conflict=user_id', {
+      method: 'POST',
+      body: {
+        user_id: user().id,
+        token: token,
+        platform: 'android',
+        updated_at: new Date().toISOString()
+      },
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+    });
+    return true;
+  }
+
   /* ---------- subscription codes (server-side!) ---------- */
   async function redeem(code) {
     if (!enabled() || !signedIn()) throw new Error('لازم تسجل دخول الأول');
@@ -172,7 +188,7 @@ const Cloud = (function () {
 
   return {
     enabled, user, signedIn, session: () => session,
-    signup, login, logout, pushAll, pull, flush, onMutation, redeem,
+    signup, login, logout, pushAll, pull, flush, onMutation, redeem, saveFcmToken,
     isApplying: () => applying
   };
 })();
