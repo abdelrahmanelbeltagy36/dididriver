@@ -37,6 +37,15 @@ Views.settings = async function (root) {
       ? (S.notifications === false ? '✅ إعادة تفعيل الإشعارات' : '🔕 إيقاف الإشعارات')
       : '🔔 تفعيل الإشعارات') + '</button></div>';
 
+  /* ---------- cloud account ---------- */
+  if (Cloud.enabled()) {
+    const cu = Cloud.user() || {};
+    html += '<div class="card"><div class="card-title">☁️ الحساب والمزامنة</div>' +
+      '<div class="kv"><span class="k">البريد</span><span class="v" dir="ltr">' + esc(cu.email || '—') + '</span></div>' +
+      '<div class="kv"><span class="k">حالة البيانات</span><span class="v">بتتزامن تلقائيًا مع السحابة لما النت يرجع</span></div>' +
+      '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
+  }
+
   /* ---------- vehicle ---------- */
   html += '<div class="card"><div class="card-title">🚗 العربية</div>' +
     field('اسم العربية', '<input class="input" id="st-vehicle" value="' + esc(S.vehicleName) + '">') +
@@ -247,6 +256,18 @@ function bindSettings(root) {
       if (++taps >= 7) { taps = 0; ST.admin = !ST.admin; go('settings'); }
     });
   }
+
+  const logoutBtn = root.querySelector('#st-logout');
+  if (logoutBtn) logoutBtn.onclick = async () => {
+    const ok = await confirmDlg({
+      title: 'تسجيل الخروج؟',
+      body: 'هتقدر تدخل تاني في أي وقت — وبياناتك محفوظة في السحابة ومزامنة.',
+      okText: 'خروج'
+    });
+    if (!ok) return;
+    await Cloud.logout();
+    location.reload();
+  };
 
   /* تغيير النمط (سائق / قيادة يومية) */
   root.querySelectorAll('#st-mode button').forEach(b => b.onclick = async () => {

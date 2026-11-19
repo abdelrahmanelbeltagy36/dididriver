@@ -11,7 +11,8 @@ const TITLES = {
   archive: 'الأرشيف والصيانة',
   settings: 'الإعدادات',
   feedback: 'اقتراحات ومشاكل',
-  onboard: 'أهلاً بك — نظّم عربيتك'
+  onboard: 'أهلاً بك — نظّم عربيتك',
+  login: 'تسجيل الدخول'
 };
 /* أسماء الوضع العادي (قيادة يومية — مصاريف بس) */
 const DAILY_TITLES = {
@@ -22,7 +23,8 @@ const DAILY_TITLES = {
   archive: 'الأرشيف والصيانة',
   settings: 'الإعدادات',
   feedback: 'اقتراحات ومشاكل',
-  onboard: 'أهلاً بك — نظّم عربيتك'
+  onboard: 'أهلاً بك — نظّم عربيتك',
+  login: 'تسجيل الدخول'
 };
 function appTitle(page) {
   return (isDaily() ? DAILY_TITLES : TITLES)[page] || (isDaily() ? DAILY_TITLES.home : TITLES.home);
@@ -114,22 +116,41 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   const quickOdo = new URLSearchParams(location.search).get('quick') === 'odo';
 
-  /* first-run onboarding — إلا لو جهاز قديم عنده بيانات أصلاً */
-  const obDone = await kvGet('onboarded', false);
-  const hasData = ((await DB.all('sessions')).length + (await DB.all('maintenance')).length) > 0;
-  if (!obDone && !hasData) {
-    go('onboard');
-  } else {
-    if (!obDone) await kvSet('onboarded', true); /* أجهزة موجودة قبل التحديث */
-    go('home');
-    /* 🔔 مراجعة الصيانة كل 3 أيام أول ما تفتح التطبيق */
-    setTimeout(() => { weeklyNudge().catch(() => {}); }, 1500);
+  /* ☁️ Supabase: لو فيه إعداد سحابة لازم تسجيل دخول أول */
+  let cloudReady = true;
+  if (Cloud.enabled()) {
+    if (!Cloud.signedIn()) {
+      go('login');
+      cloudReady = false;
+    } else {
+      try {
+        await Cloud.flush();
+        await Cloud.pull();
+        await loadSettings();
+        applyTheme();
+        applyModeLabels();
+        renderProChip();
+      } catch (e) { console.warn('cloud sync skipped:', e && e.message); }
+    }
   }
 
-  if (quickOdo) setTimeout(() => {
-    try { history.replaceState(null, '', location.pathname); } catch (e) {}
-    openQuickOdoModal();
-  }, 500);
+  if (cloudReady) {
+    /* first-run onboarding — إلا لو جهاز قديم عنده بيانات أصلاً */
+    const obDone = await kvGet('onboarded', false);
+    const hasData = ((await DB.all('sessions')).length + (await DB.all('maintenance')).length) > 0;
+    if (!obDone && !hasData) {
+      go('onboard');
+    } else {
+      if (!obDone) await kvSet('onboarded', true); /* أجهزة موجودة قبل التحديث */
+      go('home');
+      /* 🔔 مراجعة الصيانة كل 3 أيام أول ما تفتح التطبيق */
+      setTimeout(() => { weeklyNudge().catch(() => {}); }, 1500);
+    }
+    if (quickOdo) setTimeout(() => {
+      try { history.replaceState(null, '', location.pathname); } catch (e) {}
+      openQuickOdoModal();
+    }, 500);
+  }
 
   /* service worker for offline + installability */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

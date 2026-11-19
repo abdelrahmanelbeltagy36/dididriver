@@ -40,6 +40,15 @@ const DB = (function () {
     });
   }
 
+  /* mirror to Supabase — no-op when cloud is off (offline mode) */
+  function cloudHook(op, store, id, data) {
+    try {
+      if (store === 'kv' && id === 'cloud_queue') return; /* avoid queue recursion */
+      /* Cloud هو const على مستوى السكربتات — مش window.Cloud */
+      if (typeof Cloud !== 'undefined' && typeof Cloud.onMutation === 'function') Cloud.onMutation(op, store, id, data);
+    } catch (e) { /* offline-first: never let cloud break local writes */ }
+  }
+
   /* ---- localStorage fallback ---- */
   const LS = {
     key: s => 'dididb__' + s,
@@ -66,12 +75,13 @@ const DB = (function () {
   async function put(store, obj) {
     if (await ready()) {
       const r = db.transaction(store, 'readwrite').objectStore(store).put(obj);
-      return idbReq(r).then(() => obj);
+      return idbReq(r).then(() => { cloudHook('upsert', store, obj.id, obj); return obj; });
     }
     const a = LS.read(store);
     const i = a.findIndex(x => x.id === obj.id);
     if (i >= 0) a[i] = obj; else a.push(obj);
     LS.write(store, a);
+    cloudHook('upsert', store, obj.id, obj);
     return obj;
   }
 
@@ -82,7 +92,7 @@ const DB = (function () {
         const t = db.transaction(store, 'readwrite');
         const st = t.objectStore(store);
         arr.forEach(o => st.put(o));
-        t.oncomplete = () => resolve(true);
+        t.oncomplete = () => { arr.forEach(o => cloudHook('upsert', store, o.id, o)); resolve(true); };
         t.onerror = () => reject(t.error);
       });
     }
@@ -92,24 +102,27 @@ const DB = (function () {
       if (i >= 0) a[i] = o; else a.push(o);
     });
     LS.write(store, a);
+    arr.forEach(o => cloudHook('upsert', store, o.id, o));
     return true;
   }
 
   async function del(store, id) {
     if (await ready()) {
       const r = db.transaction(store, 'readwrite').objectStore(store).delete(id);
-      return idbReq(r).then(() => true);
+      return idbReq(r).then(() => { cloudHook('del', store, id); return true; });
     }
     LS.write(store, LS.read(store).filter(x => x.id !== id));
+    cloudHook('del', store, id);
     return true;
   }
 
   async function clear(store) {
     if (await ready()) {
       const r = db.transaction(store, 'readwrite').objectStore(store).clear();
-      return idbReq(r).then(() => true);
+      return idbReq(r).then(() => { cloudHook('clear', store); return true; });
     }
     LS.write(store, []);
+    cloudHook('clear', store);
     return true;
   }
 
