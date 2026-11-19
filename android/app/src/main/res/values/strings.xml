@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">إدارة دخل السائق</string>
+    <string name="title_activity_main">إدارة دخل السائق</string>
+    <string name="package_name">com.abdelrahman.dididriver</string>
+    <string name="custom_url_scheme">com.abdelrahman.dididriver</string>
+</resources>

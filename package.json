@@ -1,0 +1,21 @@
+{
+  "name": "dididriver-pro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "إدارة دخل السائق — PWA + Supabase + Capacitor (Android)",
+  "scripts": {
+    "build": "node tools/make-deploy.js",
+    "android:add": "node tools/make-deploy.js && npx cap add android",
+    "android:sync": "node tools/make-deploy.js && npx cap sync android",
+    "android:open": "npx cap open android",
+    "push:test": "node fcm/push-sender.js"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "dependencies": {
+    "@capacitor/push-notifications": "^7.0.7"
+  }
+}

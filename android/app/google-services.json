@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "234622091875",
+    "project_id": "dididriver-fcm",
+    "storage_bucket": "dididriver-fcm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:234622091875:android:2c06344e58d83272912e56",
+        "android_client_info": {
+          "package_name": "com.abdelrahman.dididriver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAaPshomyRx2DDNNLbccFQ6N7pBcdhJ-vM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
