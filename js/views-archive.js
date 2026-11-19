@@ -315,7 +315,7 @@ async function renderMaintTab(body) {
     (m.notes ? '<div class="t2">📝 ' + esc(m.notes) + '</div>' : '') +
     '</div>' +
     '<div class="side">' + money(m.cost) +
-    (m.fromWallet ? '<div style="margin-top:2px"><span class="badge orange">من خزنة الصيانة</span></div>' : '<div style="margin-top:2px"><span class="badge gray">دفعة خارجية</span></div>') +
+    (isDaily() ? '' : (m.fromWallet ? '<div style="margin-top:2px"><span class="badge orange">من خزنة الصيانة</span></div>' : '<div style="margin-top:2px"><span class="badge gray">دفعة خارجية</span></div>')) +
     '<div style="margin-top:4px">' + vBtn('maintenance', m.id) + eBtn('edit-maint') + dBtn('del-maint', m.id) +
     '<input type="hidden" data-mid="' + m.id + '"></div></div>' +
     '</div>').join('');
@@ -354,25 +354,25 @@ function showMaintExportMenu(maints) {
     '<button class="btn" id="me-pdf">PDF (طباعة)</button></div>' +
     '<div class="modal-actions"><button class="btn" onclick="closeModal()">إلغاء</button></div>',
     { onMount: w => {
-      const rows = () => maints.map(m => [m.date, CATS[m.category] || m.category, m.odo, m.cost,
+      const rows = () => maints.map(m => [m.date, maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح', CATS[m.category] || m.category, m.odo, m.cost,
         m.workshopName || '', m.workshopAddr || '', m.partBrand || '',
-        m.faultDesc || '', m.repairDesc || '', m.nextDueKm || '', m.nextDueDate || '',
-        m.fromWallet ? 'من الخزنة' : 'خارجية', m.notes || '']);
+        m.faultDesc || '', m.repairDesc || '', m.prevCost !== undefined ? m.prevCost : '', m.nextDueKm || '', m.nextDueDate || '',
+        isDaily() ? '—' : (m.fromWallet ? 'من الخزنة' : 'خارجية'), m.notes || '']);
       w.querySelector('#me-csv').onclick = () => {
-        download('سجل-الصيانة.csv', toCSV([['التاريخ', 'النوع', 'العداد', 'التكلفة', 'الورشة', 'العنوان', 'القطعة', 'وصف العطل', 'ما تم إصلاحه', 'القادم كم', 'القادم تاريخ', 'الدفع', 'ملاحظات'], ...rows()]), 'text/csv;charset=utf-8');
+        download('سجل-الصيانة.csv', toCSV([['التاريخ', 'التصنيف', 'النوع', 'العداد', 'التكلفة', 'الورشة', 'العنوان', 'القطعة', 'وصف العطل', 'ما تم إصلاحه', 'السعر القديم', 'القادم كم', 'القادم تاريخ', 'الدفع', 'ملاحظات'], ...rows()]), 'text/csv;charset=utf-8');
       };
       w.querySelector('#me-xls').onclick = () => {
         if (!requirePro('تصدير Excel')) return;
         download('سجل-الصيانة.xls', xlsDoc('سجل صيانة ' + S.vehicleName,
-          ['التاريخ', 'النوع', 'العداد', 'التكلفة', 'الورشة', 'العنوان', 'القطعة', 'وصف العطل', 'ما تم إصلاحه', 'القادم كم', 'القادم تاريخ', 'الدفع', 'ملاحظات'], rows()),
+          ['التاريخ', 'التصنيف', 'النوع', 'العداد', 'التكلفة', 'الورشة', 'العنوان', 'القطعة', 'وصف العطل', 'ما تم إصلاحه', 'السعر القديم', 'القادم كم', 'القادم تاريخ', 'الدفع', 'ملاحظات'], rows()),
           'application/vnd.ms-excel');
       };
       w.querySelector('#me-pdf').onclick = () => {
         if (!requirePro('تقرير PDF')) return;
         const b = '<h1>سجل صيانة و تاريخ ' + esc(S.vehicleName) + '</h1>' +
           '<div class="meta">عداد حالي: ' + fmtN(S.odo) + ' • ' + esc(S.plate || '') + '</div>' +
-          '<table><tr><th>التاريخ</th><th>النوع</th><th>عداد</th><th>تكلفة</th><th>الورشة</th><th>العطل</th><th>الإصلاح</th></tr>' +
-          maints.map(m => '<tr><td>' + m.date + '</td><td>' + esc(CATS[m.category] || '') + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + esc(m.workshopName || '') + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') +
+          '<table><tr><th>التاريخ</th><th>التصنيف</th><th>النوع</th><th>عداد</th><th>تكلفة</th><th>السعر القديم</th><th>الورشة</th><th>العطل</th><th>الإصلاح</th></tr>' +
+          maints.map(m => '<tr><td>' + m.date + '</td><td>' + (maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح') + '</td><td>' + esc(CATS[m.category] || '') + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + (m.prevCost !== undefined ? fmtN(m.prevCost) : '') + '</td><td>' + esc(m.workshopName || '') + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') +
           '</table>';
         printHTML('سجل الصيانة', b);
       };
@@ -386,7 +386,7 @@ function openMaintForm(existing, prefill) {
   const d = Object.assign({
     date: todayStr(), odo: +S.odo || '', category: 'oil', cost: '',
     workshopName: '', workshopAddr: '', partBrand: '',
-    nextDueKm: '', nextDueDate: '',
+    nextDueKm: '', nextDueDate: '', kind: 'routine',
     faultDesc: '', repairDesc: '', fromWallet: true, notes: '', receiptPhoto: ''
   }, base);
   if (!isEdit && !prefill) {
@@ -418,12 +418,12 @@ function openMaintForm(existing, prefill) {
       '</div>' +
       field('وصف العطل 🩺', '<textarea class="input" data-f="faultDesc" rows="2" placeholder="ما كان العطل؟ الأعراض؟ إمتى بدأ؟">' + esc(d.faultDesc || '') + '</textarea>') +
       field('ما تم إصلاحه أو تغييره 🛠️', '<textarea class="input" data-f="repairDesc" rows="2" placeholder="أسماء القطع، الكميات، الشغلانة…">' + esc(d.repairDesc || '') + '</textarea>') +
-      '<label class="check-row" style="color:var(--txt);font-weight:700">' +
+      (isDaily() ? '' : '<label class="check-row" style="color:var(--txt);font-weight:700">' +
       '<input type="checkbox" data-f="fromWallet" ' + (d.fromWallet ? 'checked' : '') + '> مدفوعة من خزنة الصيانة ' +
       fInfo('الدفع من الخزنة', [
         'لو مفعّلة: يُخصم المبلغ من رصيد خزنة الصيانة فقط.',
         'لو غير مفعّلة (دفعة خارجية من جيبك مباشرة): لا تؤثر على الخزنة ولا على الربح الشخصي.'
-      ]) + '</label>' +
+      ]) + '</label>') +
       '<div class="field"><label>صورة الفاتورة (اختياري)</label><div style="display:flex;gap:8px;align-items:center">' +
       (d.receiptPhoto ? '<img class="photo-thumb" id="mt-photo-preview" src="' + d.receiptPhoto + '">' : '') +
       '<button class="btn btn-sm" id="mt-photo-btn">📷 ' + (d.receiptPhoto ? 'تغيير الصورة' : 'إضافة صورة') + '</button></div></div>';
@@ -479,7 +479,8 @@ function openMaintForm(existing, prefill) {
         rec.nextDueDate = cur.nextDueDate || null;
         rec.faultDesc = cur.faultDesc || '';
         rec.repairDesc = cur.repairDesc || '';
-        rec.fromWallet = !!cur.fromWallet;
+        rec.fromWallet = !isDaily() && !!cur.fromWallet;
+        rec.kind = maintKind({ category: rec.category, kind: cur.kind });
         rec.notes = cur.notes || '';
         rec.receiptPhoto = cur.receiptPhoto || '';
         rec.updatedAt = Date.now();
@@ -556,13 +557,13 @@ async function renderHealthTab(body) {
   body.querySelector('#hh-pdf').onclick = () => {
     if (!requirePro('تصدير PDF')) return;
     const b = '<h1>التاريخ الصحي لـ ' + esc(S.vehicleName) + '</h1><div class="meta">' + esc(S.plate || '') + '</div>' +
-      '<table><tr><th>التاريخ</th><th>النوع</th><th>عداد</th><th>تكلفة</th><th>وصف العطل</th><th>ما تم إصلاحه</th></tr>' +
-      maints.map(m => '<tr><td>' + m.date + '</td><td>' + esc(CATS[m.category] || '') + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') + '</table>';
+      '<table><tr><th>التاريخ</th><th>التصنيف</th><th>النوع</th><th>عداد</th><th>تكلفة</th><th>وصف العطل</th><th>ما تم إصلاحه</th></tr>' +
+      maints.map(m => '<tr><td>' + m.date + '</td><td>' + (maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح') + '</td><td>' + esc(CATS[m.category] || '') + '</td><td>' + fmtN(m.odo) + '</td><td>' + fmtN(m.cost) + '</td><td>' + esc(m.faultDesc || '') + '</td><td>' + esc(m.repairDesc || '') + '</td></tr>').join('') + '</table>';
     printHTML('تاريخ العربية الصحي', b);
   };
   body.querySelector('#hh-csv').onclick = () => {
-    const rows = maints.map(m => [m.date, CATS[m.category] || m.category, m.odo, m.cost, m.faultDesc || '', m.repairDesc || '', m.workshopName || '']);
-    download('تاريخ-العربية.csv', toCSV([['التاريخ', 'النوع', 'العداد', 'التكلفة', 'وصف العطل', 'الإصلاح', 'الورشة'], ...rows]), 'text/csv;charset=utf-8');
+    const rows = maints.map(m => [m.date, maintKind(m) === 'routine' ? 'صيانة دورية' : 'عطل / إصلاح', CATS[m.category] || m.category, m.odo, m.cost, m.faultDesc || '', m.repairDesc || '', m.workshopName || '']);
+    download('تاريخ-العربية.csv', toCSV([['التاريخ', 'التصنيف', 'النوع', 'العداد', 'التكلفة', 'وصف العطل', 'الإصلاح', 'الورشة'], ...rows]), 'text/csv;charset=utf-8');
   };
 }
 

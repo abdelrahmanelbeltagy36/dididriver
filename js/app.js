@@ -33,6 +33,8 @@ function appTitle(page) {
 }
 
 async function go(page, params) {
+  /* الوضع العادي مش فيه خزنات — كل حاجة في جدول الصيانة */
+  if (isDaily() && (page === 'wallets' || page === 'purchases')) page = 'maint';
   Nav.current = page;
   Nav.params = params || {};
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('on', b.dataset.page === page));
@@ -75,8 +77,12 @@ function applyModeLabels() {
   if (add) add.textContent = isDaily() ? 'تسجيل يوم' : 'إضافة يوم';
   const home = document.querySelector('.nav-item[data-page="home"] span:last-child');
   if (home) home.textContent = isDaily() ? 'عربيتي' : 'الرئيسية';
-  const wal = document.querySelector('.nav-item[data-page="wallets"] span:last-child');
-  if (wal) wal.textContent = isDaily() ? 'المصاريف' : 'خزنة العربية';
+  const walNav = document.querySelector('.nav-item[data-page="wallets"]');
+  if (walNav) {
+    walNav.style.display = isDaily() ? 'none' : '';
+    const wal = walNav.querySelector('span:last-child');
+    if (wal) wal.textContent = 'خزنة العربية';
+  }
   document.title = appTitle(Nav.current || 'home');
 }
 

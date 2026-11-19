@@ -18,9 +18,13 @@ const CATS = {
   elec: 'إصلاح كهرباء',
   transmission: 'جير / قير',
   engine: 'المحرك',
+  fault: 'عطل / خبطة',
   other: 'أخرى'
 };
 const CAT_LIST = Object.keys(CATS);
+/* الصيانة الدورية = اللي ليها موعد متكرر. الباقي أعطال/إصلاحات */
+const ROUTINE_CATS = ['oil', 'oilFilter', 'airFilter', 'fuelFilter', 'tires', 'brakes', 'battery'];
+function maintKind(m) { return (m && m.kind) || (ROUTINE_CATS.indexOf(m && m.category) >= 0 ? 'routine' : 'fault'); }
 
 const DEFAULT_INTERVALS = {
   oil:         { km: 5000,  months: 6 },
@@ -35,6 +39,7 @@ const DEFAULT_INTERVALS = {
   elec:        { km: 0,     months: 0 },
   transmission:{ km: 0,     months: 0 },
   engine:      { km: 0,     months: 0 },
+  fault:       { km: 0,     months: 0 },
   other:       { km: 0,     months: 0 }
 };
 
@@ -88,7 +93,8 @@ function actualCostPerKm(sessions, purchases, maints) {
 }
 /* التقدير: مصاريفك الفعلية أولًا، ولو مفيش تاريخ نستخدم إعدادات الوقود/الصيانة */
 function estimatedCostPerKm(sessions, purchases, maints) {
-  const actual = actualCostPerKm(sessions, purchases, maints);
+  /* الوضع العادي مش بنسجّل مشتريات بنزين — التقدير من مصاريف الصيانة بس */
+  const actual = actualCostPerKm(sessions, isDaily() ? [] : purchases, maints);
   if (actual && actual > 0) return { value: actual, source: 'actual' };
   return { value: (+S.l100 || 0) / 100 * (+S.fuelPrice || 0) + (+S.maintPerKm || 0), source: 'settings' };
 }
@@ -303,6 +309,16 @@ function latestMaint(maints, ck) {
       (+b.updatedAt || +b.createdAt || 0) - (+a.updatedAt || +a.createdAt || 0) ||
       (b.date || '').localeCompare(a.date || '') ||
       (+b.odo || 0) - (+a.odo || 0)
+    )[0] || null;
+}
+
+/* التسجيل اللي قبل الأحدث — بنستخدمه نعرض "سعر التغيير اللي قبله" */
+function previousMaint(maints, ck, currentId) {
+  return (maints || [])
+    .filter(m => m && m.category === ck && !m.deleted && m.id !== currentId)
+    .sort((a, b) =>
+      (+b.updatedAt || +b.createdAt || 0) - (+a.updatedAt || +a.createdAt || 0) ||
+      (b.date || '').localeCompare(a.date || '')
     )[0] || null;
 }
 

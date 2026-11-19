@@ -161,8 +161,10 @@ Views.home = async function (root) {
 
   /* ---------- warnings ---------- */
   const warns = [];
-  if (W.fuelBal < 0) warns.push('<div class="warn-strip">⛽ خزنة البنزين بالعجز — تحتاج <bdi dir="ltr">' + fmtN(-W.fuelBal) + '</bdi> ج.م لتغطية المشتريات</div>');
-  if (W.maintBal < 0) warns.push('<div class="warn-strip">🔧 خزنة الصيانة بالعجز — تحتاج <bdi dir="ltr">' + fmtN(-W.maintBal) + '</bdi> ج.م لتغطية المصاريف</div>');
+  if (!isDaily()) {
+    if (W.fuelBal < 0) warns.push('<div class="warn-strip">⛽ خزنة البنزين بالعجز — تحتاج <bdi dir="ltr">' + fmtN(-W.fuelBal) + '</bdi> ج.م لتغطية المشتريات</div>');
+    if (W.maintBal < 0) warns.push('<div class="warn-strip">🔧 خزنة الصيانة بالعجز — تحتاج <bdi dir="ltr">' + fmtN(-W.maintBal) + '</bdi> ج.م لتغطية المصاريف</div>');
+  }
   const odo = currentOdo(sessions, maints);
   const missedNames = [], soonNames = [];
   for (const ck of CAT_LIST) {
@@ -202,14 +204,25 @@ Views.home = async function (root) {
     '<span class="v"><bdi dir="ltr">' + worked + ' / ' + target + '</bdi> يوم</span></div>' +
     '<div class="progress"><i style="width:' + pctDone + '%"></i></div></div>';
 
-  /* ---------- wallets ---------- */
-  html += '<div class="card"><div class="card-title">خزنة العربية<span class="spacer"></span>' +
-    '<button class="linklike" onclick="go(\'wallets\')">تفاصيل ←</button></div>' +
-    '<div class="stat-grid cols3">' +
-    '<div class="stat"><div class="lbl">⛽ خزنة البنزين</div><div class="val ' + (W.fuelBal < 0 ? 'neg-t' : 'res-t') + '">' + money(W.fuelBal) + '</div></div>' +
-    '<div class="stat"><div class="lbl">🔧 خزنة الصيانة</div><div class="val ' + (W.maintBal < 0 ? 'neg-t' : 'res-t') + '">' + money(W.maintBal) + '</div></div>' +
-    '<div class="stat"><div class="lbl">إجمالي المخصصات</div><div class="val res-t">' + money(W.fuelIn + W.maintIn) + '</div></div>' +
-    '</div></div>';
+  /* ---------- wallets (السائقين بس) / مصاريف صيانة (الوضع العادي) ---------- */
+  if (isDaily()) {
+    const spent = maints.reduce((a, m) => a + (+m.cost || 0), 0);
+    html += '<div class="card"><div class="card-title">🔧 مصاريف الصيانة<span class="spacer"></span>' +
+      '<button class="linklike" onclick="go(\'maint\')">التفاصيل ←</button></div>' +
+      '<div class="stat-grid">' +
+      '<div class="stat"><div class="lbl">إجمالي اللي دفعته</div><div class="val neg-t">' + money(spent) + '</div></div>' +
+      '<div class="stat"><div class="lbl">متوسط التكلفة/كم</div><div class="val res-t">' + fmtN(est.value) + ' ج.م</div></div>' +
+      '</div>' +
+      '<div class="t2" style="margin-top:6px">من غير خزنات — كل مصروف مسجّل جنب تغييره.</div></div>';
+  } else {
+    html += '<div class="card"><div class="card-title">خزنة العربية<span class="spacer"></span>' +
+      '<button class="linklike" onclick="go(\'wallets\')">تفاصيل ←</button></div>' +
+      '<div class="stat-grid cols3">' +
+      '<div class="stat"><div class="lbl">⛽ خزنة البنزين</div><div class="val ' + (W.fuelBal < 0 ? 'neg-t' : 'res-t') + '">' + money(W.fuelBal) + '</div></div>' +
+      '<div class="stat"><div class="lbl">🔧 خزنة الصيانة</div><div class="val ' + (W.maintBal < 0 ? 'neg-t' : 'res-t') + '">' + money(W.maintBal) + '</div></div>' +
+      '<div class="stat"><div class="lbl">إجمالي المخصصات</div><div class="val res-t">' + money(W.fuelIn + W.maintIn) + '</div></div>' +
+      '</div></div>';
+  }
 
   /* ---------- recent days ---------- */
   if (days.length) {

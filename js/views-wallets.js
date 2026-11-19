@@ -165,10 +165,13 @@ Views.wallets = async function (root) {
 };
 
 /* ---------- quick "تم التغيير" form — التاريخ + العداد + التكلفة وخلاص ---------- */
-function quickMaintDone(catKey, opts) {
+async function quickMaintDone(catKey, opts) {
   opts = opts || {};
   const iv = S.intervals[catKey] || {};
+  const allMaints = await DB.all('maintenance');
+  const prev = latestMaint(allMaints, catKey);
   const odoDef = +S.odo || '';
+  const costDef = prev && +prev.cost > 0 ? prev.cost : '';
   const nextLine = odo => {
     const lines = [];
     if (iv.km) lines.push('📏 التغيير الجاي عند <bdi dir="ltr">' + fmtN(odo + iv.km) + '</bdi> كم' + (odo ? ' (كل <bdi dir="ltr">' + fmtN(iv.km) + '</bdi> كم)' : ''));
@@ -180,9 +183,9 @@ function quickMaintDone(catKey, opts) {
     '<div class="t2" style="margin-bottom:8px">سجّل التغيير وسيبدأ العد من جديد تلقائيًا — وعداد عربيتك الرئيسي هيتحدث لوحة</div>' +
     field('التاريخ (غيرته إمتى؟)', dateInput('date', todayStr())) +
     field('عداد المسافة وقت التغيير (كم)', numInput('odo', odoDef, 'رقم العداد دلوقتي', true)) +
-    field('التكلفة (اختياري — اتركها فاضية لو هتكتبها بعدين)', numInput('cost', '', '')) +
-    '<label class="check-row" style="color:var(--txt);font-weight:700" id="qm-wallet-row">' +
-    '<input type="checkbox" data-f="fromWallet" checked> مدفوعة من خزنة الصيانة</label>' +
+    field(isDaily() ? 'اللي دفعته (اختياري — ممتلي بالسعر القديم، عدّله لو اتغير)' : 'التكلفة (ممتلي بالسعر القديم — عدّله لو اتغير)', numInput('cost', costDef, '')) +
+    (isDaily() ? '' : '<label class="check-row" style="color:var(--txt);font-weight:700" id="qm-wallet-row">' +
+    '<input type="checkbox" data-f="fromWallet" checked> مدفوعة من خزنة الصيانة</label>') +
     '<div class="formula" style="margin-top:10px" id="qm-next"></div>' +
     '<div class="modal-actions">' +
     '<button class="btn" onclick="closeModal()">إلغاء</button>' +
@@ -195,7 +198,7 @@ function quickMaintDone(catKey, opts) {
       odoInp.addEventListener('change', upd);
       const costInp = w.querySelector('[data-f="cost"]');
       const walletRow = w.querySelector('#qm-wallet-row');
-      const syncWallet = () => { walletRow.style.display = (+costInp.value > 0) ? '' : 'none'; };
+      const syncWallet = () => { if (walletRow) walletRow.style.display = (+costInp.value > 0) ? '' : 'none'; };
       costInp.addEventListener('input', syncWallet); syncWallet();
       upd();
       w.querySelector('#qm-save').onclick = async () => {
@@ -204,15 +207,15 @@ function quickMaintDone(catKey, opts) {
         const cost = +w.querySelector('[data-f="cost"]').value || 0;
         if (!(odo > 0)) { toast('اكتب رقم العداد وقت التغيير'); return; }
         /* 👉 overwrite: استبدل أحدث تسجيل لنفس النوع — ما يفضلش تسجيل قديم يطلع أحمر */
-        const allMaints = await DB.all('maintenance');
-        const prev = latestMaint(allMaints, catKey);
         const base = {
           date, odo, category: catKey, cost,
+          kind: 'routine',
+          prevCost: prev ? (+prev.cost || 0) : 0,
           workshopName: '', workshopAddr: '', partBrand: '',
           nextDueKm: iv.km ? odo + iv.km : null,
           nextDueDate: iv.months ? addDays(date, iv.months * 30) : null,
           faultDesc: '', repairDesc: '',
-          fromWallet: cost > 0 && w.querySelector('[data-f="fromWallet"]').checked,
+          fromWallet: !isDaily() && cost > 0 && !!(w.querySelector('[data-f="fromWallet"]') || {}).checked,
           notes: 'تسجيل سريع (تم التغيير)', receiptPhoto: '',
           updatedAt: Date.now()
         };
