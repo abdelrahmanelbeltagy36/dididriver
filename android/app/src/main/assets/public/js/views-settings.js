@@ -53,6 +53,8 @@ Views.settings = async function (root) {
       ' • cap=' + (typeof window.Capacitor) +
       ' • host=' + location.hostname + ' • native=' + (!!window.__NATIVE_WEBVIEW__) +
       ' • ' + (localStorage.getItem('didicloud_fcm_diag') || 'no-diag') + '</div>' +
+      '<div class="kv" style="margin-top:4px"><span class="k">التذكير اليومي (10 و4)</span><span class="v">' +
+      (localStorage.getItem('didicloud_local_reminders') ? 'مفعّل ✓' : 'مش مفعّل') + '</span></div>' +
       '<button class="btn btn-block" id="st-fcm-retry" style="margin-top:6px">🔄 إعادة محاولة تفعيل الإشعارات</button>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
   }
@@ -274,6 +276,7 @@ function bindSettings(root) {
   if (fcmRetry) fcmRetry.onclick = async () => {
     if (typeof window.retryNativePush !== 'function') { toast('الزرار ده شغال في نسخة الأندرويد بس'); return; }
     const ok = await window.retryNativePush();
+    if (typeof window.initLocalReminders === 'function') await window.initLocalReminders();
     toast(ok ? '✅ تم تفعيل الإشعارات — راجع الإعدادات' : 'لسه ما حصلش تسجيل — تأكد إن إذن الإشعارات مسموح للتطبيق من إعدادات الموبايل');
     go('settings');
   };

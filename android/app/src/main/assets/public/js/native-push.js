@@ -45,6 +45,9 @@
         window.Capacitor.addListener('PushNotifications', 'registrationError', e => {
           diag('direct-error=' + ((e && e.message) || JSON.stringify(e)));
         });
+        window.Capacitor.addListener('LocalNotifications', 'localNotificationActionPerformed', () => {
+          setTimeout(() => { if (typeof openQuickOdoModal === 'function') openQuickOdoModal(); }, 500);
+        });
         diag('direct-listener');
       }
     } catch (e) { diag('direct-listener-error=' + (e && e.message)); }
@@ -99,11 +102,45 @@
       setTimeout(() => {
         if (!localStorage.getItem('didicloud_fcm_token')) diag('no-token-after-8s');
       }, 8000);
+      /* التذكير اليومي الثابت — شغال حتى لو FCM معلق */
+      initLocalReminders();
     } catch (e) {
       diag('init-error=' + (e && e.message));
       console.warn('push init failed', e);
     }
   }
+
+  /* 🔔 إشعارات يومية محلية — بيشغّلها نظام الأندرويد نفسه (من غير إنترنت/Firebase) */
+  async function initLocalReminders() {
+    const ln = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+    const d = msg => {
+      const old = localStorage.getItem('didicloud_fcm_diag') || '';
+      localStorage.setItem('didicloud_fcm_diag', old + ' | local-' + msg);
+    };
+    if (!ln) { d('no-plugin'); return false; }
+    try {
+      const perm = await ln.requestPermissions();
+      if (!perm || perm.display !== 'granted') { d('perm=' + JSON.stringify(perm)); return false; }
+      const nextAt = h => {
+        const dt = new Date();
+        dt.setHours(h, 0, 0, 0);
+        if (dt.getTime() <= Date.now()) dt.setDate(dt.getDate() + 1);
+        return dt;
+      };
+      await ln.schedule({ notifications: [
+        { id: 101, title: '📍 وقت تسجيل الكيلومتر — الصبح',
+          body: 'الساعة 10 الصبح — لو مشيت اكتب عدادك من الإشعار.',
+          schedule: { at: nextAt(10), repeats: true, every: 'day' } },
+        { id: 102, title: '📍 وقت تسجيل الكيلومتر — العصر',
+          body: 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك.',
+          schedule: { at: nextAt(16), repeats: true, every: 'day' } }
+      ]});
+      localStorage.setItem('didicloud_local_reminders', 'ok');
+      d('ok');
+      return true;
+    } catch (e) { d('error=' + (e && e.message)); return false; }
+  }
+  window.initLocalReminders = initLocalReminders;
 
   window.initNativePush = initNativePush;
   window.retryNativePush = async function () {

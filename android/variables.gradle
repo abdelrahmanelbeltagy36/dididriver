@@ -14,4 +14,4 @@ ext {
     androidxEspressoCoreVersion = '3.6.1'
     cordovaAndroidVersion = '10.1.1'
 }
-// trigger build directlistener
+// trigger build localnotif
