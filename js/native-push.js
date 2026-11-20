@@ -18,7 +18,8 @@
     started = true;
 
     function diag(msg) {
-      localStorage.setItem('didicloud_fcm_diag', msg);
+      const old = localStorage.getItem('didicloud_fcm_diag') || '';
+      localStorage.setItem('didicloud_fcm_diag', (old ? old + ' | ' : '') + msg);
     }
     try {
       /* أندرويد 13+ محتاج إذن صريح */
@@ -34,9 +35,9 @@
       if (!token) return false;
       if (window.Cloud && typeof Cloud.enabled === 'function' && Cloud.enabled() &&
           typeof Cloud.signedIn === 'function' && Cloud.signedIn()) {
-        try { await Cloud.saveFcmToken(token); return true; }
-        catch (e) { console.warn('save FCM token failed', e); }
-      }
+        try { await Cloud.saveFcmToken(token); diag('saved'); return true; }
+        catch (e) { diag('save-error=' + (e && e.message)); console.warn('save FCM token failed', e); }
+      } else diag('not-signed-in');
       return false;
     }
     window.trySaveFcmToken = trySaveToken;
@@ -72,7 +73,10 @@
       });
 
       const reg = await plugin.register();
-      diag('reg=' + (reg ? 'ok' : 'empty'));
+      diag('reg-called');
+      /* التوكن بيجي async — نعيد المحاولة لو ما وصلش */
+      setTimeout(async () => { try { await plugin.register(); diag('retry1'); } catch (e) {} }, 1500);
+      setTimeout(async () => { try { await plugin.register(); diag('retry2'); } catch (e) {} }, 4500);
     } catch (e) {
       diag('init-error=' + (e && e.message));
       console.warn('push init failed', e);
