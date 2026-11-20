@@ -121,19 +121,21 @@
     try {
       const perm = await ln.requestPermissions();
       if (!perm || perm.display !== 'granted') { d('perm=' + JSON.stringify(perm)); return false; }
-      const nextAt = h => {
+      const nextAt = (h, m) => {
         const dt = new Date();
-        dt.setHours(h, 0, 0, 0);
+        dt.setHours(h, m || 0, 0, 0);
         if (dt.getTime() <= Date.now()) dt.setDate(dt.getDate() + 1);
         return dt;
       };
+      /* إلغاء إشعار الـ 10 القديم لو كان مجدول من نسخة سابقة */
+      try { await ln.cancel({ ids: [101] }); } catch (e) {}
       await ln.schedule({ notifications: [
-        { id: 101, title: '📍 وقت تسجيل الكيلومتر — الصبح',
-          body: 'الساعة 10 الصبح — لو مشيت اكتب عدادك من الإشعار.',
-          schedule: { at: nextAt(10), repeats: true, every: 'day' } },
         { id: 102, title: '📍 وقت تسجيل الكيلومتر — العصر',
           body: 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك.',
-          schedule: { at: nextAt(16), repeats: true, every: 'day' } }
+          schedule: { at: nextAt(16, 0), repeats: true, every: 'day' } },
+        { id: 103, title: '📍 وقت تسجيل الكيلومتر — بالليل',
+          body: 'الساعة 9 وربع — آخر فرصة النهاردة تسجّل عدادك.',
+          schedule: { at: nextAt(21, 15), repeats: true, every: 'day' } }
       ]});
       localStorage.setItem('didicloud_local_reminders', 'ok');
       d('ok');

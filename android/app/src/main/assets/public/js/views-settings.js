@@ -53,7 +53,7 @@ Views.settings = async function (root) {
       ' • cap=' + (typeof window.Capacitor) +
       ' • host=' + location.hostname + ' • native=' + (!!window.__NATIVE_WEBVIEW__) +
       ' • ' + (localStorage.getItem('didicloud_fcm_diag') || 'no-diag') + '</div>' +
-      '<div class="kv" style="margin-top:4px"><span class="k">التذكير اليومي (10 و4)</span><span class="v">' +
+      '<div class="kv" style="margin-top:4px"><span class="k">التذكير اليومي (4 عصر + 9 وربع)</span><span class="v">' +
       (localStorage.getItem('didicloud_local_reminders') ? 'مفعّل ✓' : 'مش مفعّل') + '</span></div>' +
       '<button class="btn btn-block" id="st-fcm-retry" style="margin-top:6px">🔄 إعادة محاولة تفعيل الإشعارات</button>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';

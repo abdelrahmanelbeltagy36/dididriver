@@ -93,8 +93,10 @@ async function sendFcm(accessToken, projectId, token, slot) {
     const hour = cairoHour();
     const force = String(process.env.FORCE_SEND || '').toLowerCase() === 'true';
     console.log('Cairo hour =', hour, force ? '(force test)' : '');
-    if (!force && hour !== 10 && hour !== 16) { console.log('Not a reminder hour — skip'); return; }
-    const slot = (hour === 10 || hour === 16) ? hour : 16;
+    /* التذكير اليومي شغال محليًا على الجهاز (4 عصر + 9 وربع).
+       FCM هنا احتياطي للرسائل البعيدة — بيبعت بس الساعة 4 لو اشتغل. */
+    if (!force && hour !== 16) { console.log('Not a reminder hour — skip'); return; }
+    const slot = 16;
 
     const sa = JSON.parse(SA_JSON);
     const [accessToken, tokens] = await Promise.all([getAccessToken(sa), fetchTokens()]);
