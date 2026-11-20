@@ -25,19 +25,12 @@ Views.settings = async function (root) {
       : 'الوضع الحالي: <b>دخل السائق</b> — ديدي/أوبر مع العمولات وحساب الربح الشخصي.') + '</div>' +
     '<div class="t2" style="margin-top:4px">تغيير النمط بيخبي سجلات النمط التاني ويظهر سجلات النمط ده — وكل البيانات محفوظة.</div></div>';
 
-  /* ---------- إشعارات الصيانة ---------- */
-  const notifState = !('Notification' in window) ? 'المتصفح مش بيدعم الإشعارات'
-    : Notification.permission === 'granted' ? 'مفعّلة ✓'
-    : Notification.permission === 'denied' ? 'مقفولة من إعدادات المتصفح' : 'لم تُطلب بعد';
-  html += '<div class="card"><div class="card-title">🔔 إشعارات الصيانة</div>' +
-    '<div class="t2" style="line-height:1.8">تذكير العداد <b>كل يوم الساعة 10 الصبح والساعة 4 العصر</b>. لو التطبيق كان مفتوح، الإشعار بيجي في الوقت؛ ولو قفلته وفتحته بعد الوقت، بيجيك فورًا. ولو حاجة قربت أو فاتت، كل حاجة ليها إشعار لوحدها. وترقد تعدّل العداد من زرار جوه الإشعار.</div>' +
-    '<div class="t2" style="margin-top:6px;color:var(--sub)">📌 نسخة الويب مش بتبعت إشعار والتطبيق مقفول تمامًا — ده محتاج نسخة أندرويد أصلية (FCM).</div>' +
-    '<div class="kv" style="margin-top:8px"><span class="k">الحالة</span><span class="v">' + notifState + '</span></div>' +
-    '<button class="btn btn-pri btn-block" id="st-notif">' +
-    (('Notification' in window) && Notification.permission === 'granted'
-      ? (S.notifications === false ? '✅ إعادة تفعيل الإشعارات' : '🔕 إيقاف الإشعارات')
-      : '🔔 تفعيل الإشعارات') + '</button>' +
-    '<button class="btn btn-block" id="st-notif-test" style="margin-top:6px">🧪 إرسال إشعار تجريبي (اتأكد دلوقتي)</button></div>';
+  /* ---------- تذكير العداد اليومي ---------- */
+  html += '<div class="card"><div class="card-title">🔔 تذكير العداد اليومي</div>' +
+    '<div class="t2" style="line-height:1.8">في <b>نسخة الأندرويد</b>: إشعار من نظام الموبايل الساعة <b>4 العصر</b> و<b>9 وربع مساءً</b> كل يوم — والتطبيق مقفول. ولما تضغطه يفتحك على خانة العداد.<br>في <b>نسخة المتصفح</b>: الإشعارات بتيجي لما التطبيق مفتوح.</div>' +
+    '<div class="kv" style="margin-top:8px"><span class="k">التذكير اليومي (4 عصر + 9 وربع)</span><span class="v">' +
+    (localStorage.getItem('didicloud_local_reminders') ? 'مفعّل ✓' : 'مش مفعّل') + '</span></div>' +
+    '<button class="btn btn-pri btn-block" id="st-local-reminder" style="margin-top:8px">🔔 تفعيل تذكير الأندرويد</button></div>';
 
   /* ---------- cloud account ---------- */
   if (Cloud.enabled()) {
@@ -45,17 +38,6 @@ Views.settings = async function (root) {
     html += '<div class="card"><div class="card-title">☁️ الحساب والمزامنة</div>' +
       '<div class="kv"><span class="k">البريد</span><span class="v" dir="ltr">' + esc(cu.email || '—') + '</span></div>' +
       '<div class="kv"><span class="k">حالة البيانات</span><span class="v">بتتزامن تلقائيًا مع السحابة لما النت يرجع</span></div>' +
-      '<div class="kv"><span class="k">إشعارات أندرويد (FCM)</span><span class="v">' +
-      (localStorage.getItem('didicloud_fcm_token') ? 'متصلة ✓' : 'مش متصلة — افتح التطبيق الأصلي') + '</span></div>' +
-      '<div class="t2" style="font-size:.72rem;color:var(--sub);word-break:break-all">تشخيص: Capacitor=' +
-      (typeof window.Capacitor) + ' • native=' + (!!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) +
-      ' • plugin=' + (typeof (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications)) +
-      ' • cap=' + (typeof window.Capacitor) +
-      ' • host=' + location.hostname + ' • native=' + (!!window.__NATIVE_WEBVIEW__) +
-      ' • ' + (localStorage.getItem('didicloud_fcm_diag') || 'no-diag') + '</div>' +
-      '<div class="kv" style="margin-top:4px"><span class="k">التذكير اليومي (4 عصر + 9 وربع)</span><span class="v">' +
-      (localStorage.getItem('didicloud_local_reminders') ? 'مفعّل ✓' : 'مش مفعّل') + '</span></div>' +
-      '<button class="btn btn-block" id="st-fcm-retry" style="margin-top:6px">🔄 إعادة محاولة تفعيل الإشعارات</button>' +
       '<button class="btn btn-block" id="st-logout" style="margin-top:8px">🚪 تسجيل الخروج</button></div>';
   }
 
@@ -272,17 +254,13 @@ function bindSettings(root) {
     });
   }
 
-  const fcmRetry = root.querySelector('#st-fcm-retry');
-  if (fcmRetry) fcmRetry.onclick = async () => {
-    if (typeof window.retryNativePush !== 'function') { toast('الزرار ده شغال في نسخة الأندرويد بس'); return; }
-    const ok = await window.retryNativePush();
-    if (typeof window.initLocalReminders === 'function') await window.initLocalReminders();
-    toast(ok ? '✅ تم تفعيل الإشعارات — راجع الإعدادات' : 'لسه ما حصلش تسجيل — تأكد إن إذن الإشعارات مسموح للتطبيق من إعدادات الموبايل');
+  const localBtn = root.querySelector('#st-local-reminder');
+  if (localBtn) localBtn.onclick = async () => {
+    if (typeof window.initLocalReminders !== 'function') { toast('الزرار ده شغال في نسخة الأندرويد بس'); return; }
+    const ok = await window.initLocalReminders();
+    toast(ok ? '✅ تم تفعيل التذكير اليومي (4 عصر + 9 وربع)' : 'ما حصلش تفعيل — تأكد إن إذن الإشعارات مسموح للتطبيق من إعدادات الموبايل');
     go('settings');
   };
-
-  const notifTestBtn = root.querySelector('#st-notif-test');
-  if (notifTestBtn) notifTestBtn.onclick = () => sendTestNotification();
 
   const logoutBtn = root.querySelector('#st-logout');
   if (logoutBtn) logoutBtn.onclick = async () => {
@@ -314,27 +292,6 @@ function bindSettings(root) {
     toast('✅ تم تغيير النمط — سجلاتك محفوظة');
     go('settings');
   });
-
-  /* إشعارات الصيانة */
-  const notifBtn = root.querySelector('#st-notif');
-  if (notifBtn) notifBtn.onclick = async () => {
-    if (('Notification' in window) && Notification.permission === 'granted') {
-      if (S.notifications === false) {
-        S.notifications = true; await saveSettings();
-        if (typeof window.initLocalReminders === 'function') await window.initLocalReminders();
-        toast('✅ الإشعارات مفعّلة تاني');
-        go('settings');
-        await notifyDueItems({ force: true });
-      } else {
-        S.notifications = false; await saveSettings();
-        toast('🔕 الإشعارات متوقفة');
-        go('settings');
-      }
-      return;
-    }
-    await enableNotifications(true);
-    go('settings');
-  };
 
   root.querySelector('#st-photo-btn').onclick = () => pickImage(d => {
     ST.photoTmp = d;

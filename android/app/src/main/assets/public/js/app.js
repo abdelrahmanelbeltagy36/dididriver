@@ -168,7 +168,7 @@ window.addEventListener('DOMContentLoaded', async () => {
      المستخدم بيفعّلها بنفسه من الإعدادات عبر زرار «تفعيل الإشعارات» */
 
   /* الـ WebView الأصلي بيحقن capacitor.js بنفسه — الـ Service Worker بيخلي الكاش يتقدمه
-     فبنوقفه في الأندرويد عشان الـ bridge والـ FCM يشتغلوا */
+     فبنوقفه في الأندرويد عشان سكربت الـ bridge يتحقن صح */
   const NATIVE_WEBVIEW = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   window.__NATIVE_WEBVIEW__ = NATIVE_WEBVIEW;
   if (NATIVE_WEBVIEW) {
