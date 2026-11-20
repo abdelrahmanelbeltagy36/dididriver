@@ -30,6 +30,25 @@
       } else diag('perm=no-api');
     } catch (e) { diag('perm-error=' + (e && e.message)); }
 
+    /* مستمع مباشر عبر الـ bridge كبديل لو addListener بتاع الـ plugin ما وصلش */
+    function onToken(info) {
+      if (!info || !info.token) return;
+      try {
+        localStorage.setItem('didicloud_fcm_token', info.token);
+        diag('token=ok');
+        trySaveToken();
+      } catch (e) {}
+    }
+    try {
+      if (window.Capacitor && typeof window.Capacitor.addListener === 'function') {
+        window.Capacitor.addListener('PushNotifications', 'registration', onToken);
+        window.Capacitor.addListener('PushNotifications', 'registrationError', e => {
+          diag('direct-error=' + ((e && e.message) || JSON.stringify(e)));
+        });
+        diag('direct-listener');
+      }
+    } catch (e) { diag('direct-listener-error=' + (e && e.message)); }
+
     async function trySaveToken() {
       const token = localStorage.getItem('didicloud_fcm_token') || '';
       if (!token) return false;
@@ -77,6 +96,9 @@
       /* التوكن بيجي async — نعيد المحاولة لو ما وصلش */
       setTimeout(async () => { try { await plugin.register(); diag('retry1'); } catch (e) {} }, 1500);
       setTimeout(async () => { try { await plugin.register(); diag('retry2'); } catch (e) {} }, 4500);
+      setTimeout(() => {
+        if (!localStorage.getItem('didicloud_fcm_token')) diag('no-token-after-8s');
+      }, 8000);
     } catch (e) {
       diag('init-error=' + (e && e.message));
       console.warn('push init failed', e);
