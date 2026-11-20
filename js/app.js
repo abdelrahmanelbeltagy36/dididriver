@@ -164,8 +164,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }, 500);
   }
 
-  /* 📱 FCM: إشعارات حقيقية حتى والتطبيق مقفول (نسخة أندرويد بس) */
-  if (typeof initNativePush === 'function') initNativePush();
+  /* 📱 الإشعارات المحلية: مش بنشغّلها عند الفتح (بتعمل حوار إذن يعطل الـ WebView)
+     المستخدم بيفعّلها بنفسه من الإعدادات عبر زرار «تفعيل الإشعارات» */
 
   /* الـ WebView الأصلي بيحقن capacitor.js بنفسه — الـ Service Worker بيخلي الكاش يتقدمه
      فبنوقفه في الأندرويد عشان الـ bridge والـ FCM يشتغلوا */

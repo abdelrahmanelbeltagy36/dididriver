@@ -321,6 +321,7 @@ function bindSettings(root) {
     if (('Notification' in window) && Notification.permission === 'granted') {
       if (S.notifications === false) {
         S.notifications = true; await saveSettings();
+        if (typeof window.initLocalReminders === 'function') await window.initLocalReminders();
         toast('✅ الإشعارات مفعّلة تاني');
         go('settings');
         await notifyDueItems({ force: true });
