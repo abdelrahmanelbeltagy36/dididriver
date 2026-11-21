@@ -27,10 +27,7 @@ Views.settings = async function (root) {
 
   /* ---------- تذكير العداد اليومي ---------- */
   html += '<div class="card"><div class="card-title">🔔 تذكير العداد اليومي</div>' +
-    '<div class="t2" style="line-height:1.8">في <b>نسخة الأندرويد</b>: إشعار من نظام الموبايل الساعة <b>4 العصر</b> و<b>9 وربع مساءً</b> كل يوم — والتطبيق مقفول. ولما تضغطه يفتحك على خانة العداد.<br>في <b>نسخة المتصفح</b>: الإشعارات بتيجي لما التطبيق مفتوح.</div>' +
-    '<div class="kv" style="margin-top:8px"><span class="k">التذكير اليومي (4 عصر + 9 وربع)</span><span class="v">' +
-    (localStorage.getItem('didicloud_local_reminders') ? 'مفعّل ✓' : 'مش مفعّل') + '</span></div>' +
-    '<button class="btn btn-pri btn-block" id="st-local-reminder" style="margin-top:8px">🔔 تفعيل تذكير الأندرويد</button></div>';
+    '<div class="t2" style="line-height:1.8">تذكير <b>4 العصر و9 وربع مساءً</b> كل يوم — بيجي لما التطبيق مفتوح (أو من شريط الإشعارات في المتصفح). ولو حاجة قربت أو فاتت، كل حاجة ليها إشعار لوحدها.</div></div>';
 
   /* ---------- cloud account ---------- */
   if (Cloud.enabled()) {
@@ -253,14 +250,6 @@ function bindSettings(root) {
       if (++taps >= 7) { taps = 0; ST.admin = !ST.admin; go('settings'); }
     });
   }
-
-  const localBtn = root.querySelector('#st-local-reminder');
-  if (localBtn) localBtn.onclick = async () => {
-    if (typeof window.initLocalReminders !== 'function') { toast('الزرار ده شغال في نسخة الأندرويد بس'); return; }
-    const ok = await window.initLocalReminders();
-    toast(ok ? '✅ تم تفعيل التذكير اليومي (4 عصر + 9 وربع)' : 'ما حصلش تفعيل — تأكد إن إذن الإشعارات مسموح للتطبيق من إعدادات الموبايل');
-    go('settings');
-  };
 
   const logoutBtn = root.querySelector('#st-logout');
   if (logoutBtn) logoutBtn.onclick = async () => {

@@ -262,19 +262,19 @@ async function notifyDueItems(opts) {
   return sent;
 }
 
-/* =================⏰ تذكير العداد — الساعة 10 والساعة 4 كل يوم ================= */
+/* =================⏰ تذكير العداد — 4 عصر و9 وربع كل يوم ================= */
 const ODO_SLOTS = [
-  { h: 10, key: 'lastOdoNudge10', tagPart: '10', label: 'الصبح',
-    body: 'الساعة 10 الصبح — لو مشيت شوية اكتب عدادك دلوقتي. اضغط «تحديث العداد».' },
-  { h: 16, key: 'lastOdoNudge16', tagPart: '16', label: 'العصر',
-    body: 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك. اضغط «تحديث العداد».' }
+  { h: 16, m: 0, key: 'lastOdoNudge16', tagPart: '16', label: 'العصر',
+    body: 'الساعة 4 العصر — الوقت المثالي إنك تسجّل عدادك. اضغط «تحديث العداد».' },
+  { h: 21, m: 15, key: 'lastOdoNudge2115', tagPart: '2115', label: 'بالليل',
+    body: 'الساعة 9 وربع — آخر فرصة النهاردة تسجّل عدادك. اضغط «تحديث العداد».' }
 ];
 const odoTimers = {};
 
 function scheduleSlot(slot) {
   if (odoTimers[slot.h]) return;
   const now = new Date();
-  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), slot.h, 0, 0);
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), slot.h, slot.m || 0, 0);
   if (target <= now) return;
   const ms = target - now;
   if (ms > 2147483647) return; /* حد setTimeout */
@@ -296,7 +296,10 @@ async function dailyNudge() {
   let sentAny = false;
   for (const slot of ODO_SLOTS) {
     if ((await kvGet(slot.key, '')) === today) continue;
-    if (new Date().getHours() < slot.h) { scheduleSlot(slot); continue; }
+    const now = new Date();
+    if (now.getHours() < slot.h || (now.getHours() === slot.h && now.getMinutes() < (slot.m || 0))) {
+      scheduleSlot(slot); continue;
+    }
     await kvSet(slot.key, today);
     if (await sendOdoSlot(slot)) sentAny = true;
   }
